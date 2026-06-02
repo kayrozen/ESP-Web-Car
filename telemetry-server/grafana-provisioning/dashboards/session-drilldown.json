@@ -1,0 +1,49 @@
+{
+  "title": "Session Drilldown",
+  "uid": "session-drilldown",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "session_id",
+        "type": "query",
+        "label": "Session",
+        "datasource": { "type": "postgres" },
+        "query": "SELECT session_id || ' (' || firmware_version || ' @ ' || started_at::date || ')' AS __text, session_id AS __value FROM sessions ORDER BY started_at DESC LIMIT 100",
+        "refresh": 2,
+        "sort": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Session Info",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "targets": [{
+        "datasource": { "type": "postgres" },
+        "rawSql": "SELECT firmware_version || ' | reset: ' || COALESCE(reset_reason,'?') || ' | telemetry: ' || telemetry_enabled AS value FROM sessions WHERE session_id = '$session_id'",
+        "format": "table"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value" }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Event Timeline",
+      "gridPos": { "h": 20, "w": 24, "x": 0, "y": 4 },
+      "targets": [{
+        "datasource": { "type": "postgres" },
+        "rawSql": "SELECT device_ts_ms, server_ts, event_type, payload FROM events WHERE session_id = '$session_id' ORDER BY device_ts_ms",
+        "format": "table"
+      }],
+      "options": {
+        "sortBy": [{"displayName":"device_ts_ms","desc":false}],
+        "footer": { "show": true, "reducer": ["count"], "fields": ["event_type"] }
+      }
+    }
+  ]
+}

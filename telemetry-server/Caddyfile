@@ -1,0 +1,26 @@
+tm.plaquetournante.art {
+
+    # Device-facing API — no extra auth, devices use Bearer tokens
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+
+    # Admin dashboard — protected by HTTP basic auth
+    handle /grafana/* {
+        basic_auth {
+            admin {env.GRAFANA_BASIC_HASH}
+        }
+        reverse_proxy grafana:3000
+    }
+
+    # Static privacy page
+    handle /privacy {
+        root * /srv/static
+        file_server
+    }
+
+    # Health probe (unauthed, used internally)
+    handle /healthz {
+        reverse_proxy api:8080
+    }
+}

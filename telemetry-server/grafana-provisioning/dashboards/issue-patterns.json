@@ -1,0 +1,54 @@
+{
+  "title": "Issue Patterns",
+  "uid": "issue-patterns",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10m",
+  "time": { "from": "now-30d", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Reconnects by Kind and Firmware",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{
+        "datasource": { "type": "postgres" },
+        "rawSql": "SELECT s.firmware_version, e.payload->>'kind' AS kind, COUNT(*) AS reconnects, COUNT(DISTINCT s.session_id) AS sessions, ROUND(COUNT(*)::numeric / NULLIF(COUNT(DISTINCT s.session_id),0), 2) AS per_session FROM sessions s JOIN events e ON e.session_id = s.session_id WHERE e.event_type = 'reconnect' GROUP BY s.firmware_version, kind ORDER BY reconnects DESC",
+        "format": "table"
+      }]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "AVRCP Commands by Speaker",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{
+        "datasource": { "type": "postgres" },
+        "rawSql": "SELECT payload->>'peer_mac_hash' AS speaker, payload->>'command' AS cmd, COUNT(*) AS n FROM events WHERE event_type = 'avrcp_passthrough' GROUP BY speaker, cmd ORDER BY n DESC LIMIT 30",
+        "format": "table"
+      }]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "ICY → AVRCP Metadata Lag (sessions with gap > 2s)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 8 },
+      "targets": [{
+        "datasource": { "type": "postgres" },
+        "rawSql": "WITH icy AS (SELECT session_id, device_ts_ms, payload->>'title_hash' AS title FROM events WHERE event_type = 'icy_title' AND (payload->>'parse_ok')::bool), tc AS (SELECT session_id, device_ts_ms, payload->>'title_hash' AS title FROM events WHERE event_type = 'avrcp_metadata_sent') SELECT icy.session_id, icy.device_ts_ms, icy.title FROM icy LEFT JOIN tc ON tc.session_id = icy.session_id AND tc.title = icy.title AND tc.device_ts_ms BETWEEN icy.device_ts_ms AND icy.device_ts_ms + 2000 WHERE tc.title IS NULL ORDER BY icy.device_ts_ms DESC LIMIT 50",
+        "format": "table"
+      }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Heap Low Events Over Time",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 18 },
+      "targets": [{
+        "datasource": { "type": "postgres" },
+        "rawSql": "SELECT date_trunc('day', server_ts) AS time, COUNT(*) AS heap_low FROM events WHERE event_type = 'heap_low' AND server_ts > NOW() - INTERVAL '30 days' GROUP BY 1 ORDER BY 1",
+        "format": "time_series"
+      }]
+    }
+  ]
+}
