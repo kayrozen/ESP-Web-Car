@@ -202,7 +202,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     /* Show device name if set */
     char dev_name[STORAGE_DEVICE_NAME_MAX] = {0};
     if (storage_get_device_name(dev_name, sizeof(dev_name)) == ESP_OK && dev_name[0]) {
-        char name_html[96];
+        char name_html[160];
         snprintf(name_html, sizeof(name_html),
                  "<p style='color:#aaa;font-size:.9em;margin-bottom:12px'>"
                  "Device: <b style='color:#4ecca3'>%s</b></p>", dev_name);

@@ -271,6 +271,14 @@ static esp_err_t bt_select_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* TaskFunction_t wrapper — FreeRTOS tasks take void* and return void */
+static void ota_task_wrapper(void *arg)
+{
+    ota_perform_update((const char *)arg);
+    free(arg);
+    vTaskDelete(NULL);
+}
+
 /* ── POST /ota_start ─────────────────────────────────────────────────── */
 
 static esp_err_t ota_start_handler(httpd_req_t *req)
@@ -312,7 +320,7 @@ static esp_err_t ota_start_handler(httpd_req_t *req)
 
     /* Run OTA in background task */
     char *url_copy = strdup(url);
-    xTaskCreate((TaskFunction_t)ota_perform_update, "ota", 8192, url_copy, 5, NULL);
+    xTaskCreate(ota_task_wrapper, "ota", 8192, url_copy, 5, NULL);
     return ESP_OK;
 }
 
