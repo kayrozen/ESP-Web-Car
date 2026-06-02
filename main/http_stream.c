@@ -42,7 +42,7 @@ static TaskHandle_t            s_task_handle   = NULL;
 
 /* ── Now-playing (shared, mutex-protected) ───────────────────────────── */
 
-#define NOW_PLAYING_MAX 128
+#define NOW_PLAYING_MAX 192
 static char              s_now_playing[NOW_PLAYING_MAX] = {0};
 static SemaphoreHandle_t s_now_playing_mutex            = NULL;
 
