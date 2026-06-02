@@ -6,6 +6,7 @@
 
 #include "machine_type.h"
 #include "FDK_audio.h"
+#include "FDK_qmf_domain.h"
 #include "genericStds.h"
 
 #ifdef __cplusplus
@@ -19,6 +20,7 @@ typedef INT SACDEC_ERROR;
 #define MPS_UNSUPPORTED_CONFIG       ((SACDEC_ERROR)1)
 #define MPS_PARSE_ERROR              ((SACDEC_ERROR)2)
 #define MPS_OUTPUT_BUFFER_TOO_SMALL  ((SACDEC_ERROR)3)
+#define MPS_INVALID_PARAMETER        ((SACDEC_ERROR)4)
 #define SAC_INSTANCE_NOT_FULL_AVAILABLE 1
 
 /* ── Parameter IDs ───────────────────────────────────────────────────── */
@@ -37,19 +39,15 @@ typedef INT SAC_INPUT_CONFIG;
 /* ── Opaque decoder handle ───────────────────────────────────────────── */
 typedef struct CMpegSurroundDecoder CMpegSurroundDecoder;
 
-/* Forward-declared types used in function signatures */
-struct FDK_QMF_DOMAIN;
-struct LIB_INFO;
-
 /* ── No-op function stubs ────────────────────────────────────────────── */
 
 static inline INT mpegSurroundDecoder_Open(
     CMpegSurroundDecoder **pSelf, INT stereoConfigIndex,
-    struct FDK_QMF_DOMAIN *pQmfDomain)
+    FDK_QMF_DOMAIN *pQmfDomain)
 {
-    (void)pSelf; (void)stereoConfigIndex; (void)pQmfDomain;
+    (void)stereoConfigIndex; (void)pQmfDomain;
     if (pSelf) *pSelf = NULL;
-    return 0; /* success — NULL handle means "disabled" */
+    return 0;
 }
 
 static inline INT mpegSurroundDecoder_IsFullMpegSurroundDecoderInstanceAvailable(
