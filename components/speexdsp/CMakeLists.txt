@@ -13,7 +13,6 @@ idf_component_register(
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     OUTSIDE_SPEEX=1
     RANDOM_PREFIX=speex
-    FLOATING_POINT=0
     FIXED_POINT=1
     EXPORT=
     RESAMPLE_FULL_SINC_TABLE=0

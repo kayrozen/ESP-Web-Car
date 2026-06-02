@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -131,44 +132,6 @@ static void avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *par
             break;
         }
 
-        case ESP_AVRC_TG_GET_ELEM_ATTR_EVT: {
-            /* Car is requesting track metadata */
-            xSemaphoreTake(s_meta_mutex, portMAX_DELAY);
-
-            esp_avrc_elem_attr_t attrs[4];
-            int n = 0;
-
-#define ADD_ATTR(id, str) do {                          \
-    if (str[0] != '\0') {                               \
-        attrs[n].attr_id  = (id);                       \
-        attrs[n].char_set = 0x006A; /* UTF-8 */         \
-        attrs[n].str_len  = (uint16_t)strlen(str);      \
-        attrs[n].p_str    = (uint8_t *)(str);           \
-        n++;                                            \
-    }                                                   \
-} while(0)
-
-            ADD_ATTR(ESP_AVRC_MD_ATTR_TITLE,  s_title);
-            ADD_ATTR(ESP_AVRC_MD_ATTR_ARTIST, s_artist);
-            ADD_ATTR(ESP_AVRC_MD_ATTR_GENRE,  s_genre);
-
-#undef ADD_ATTR
-
-            if (n == 0) {
-                /* Nothing — send a single blank title */
-                static const uint8_t empty[] = {0};
-                attrs[0].attr_id  = ESP_AVRC_MD_ATTR_TITLE;
-                attrs[0].char_set = 0x006A;
-                attrs[0].str_len  = 0;
-                attrs[0].p_str    = (uint8_t *)empty;
-                n = 1;
-            }
-
-            esp_avrc_get_ele_attr_rsp(n, attrs);
-            xSemaphoreGive(s_meta_mutex);
-            break;
-        }
-
         case ESP_AVRC_TG_SET_ABSOLUTE_VOLUME_CMD_EVT:
             /* Car-side amp controls its own volume — no action needed */
             ESP_LOGD(TAG, "Set absolute volume: %u", param->set_abs_vol.volume);
@@ -206,7 +169,7 @@ esp_err_t avrcp_init(void)
     esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_STOP);
     esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_FORWARD);
     esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_BACKWARD);
-    esp_avrc_tg_set_psth_cmd_filter(ESP_AVRC_PSTH_FILTER_SUPPORT_CMD, &psth);
+    esp_avrc_tg_set_psth_cmd_filter(ESP_AVRC_PSTH_FILTER_SUPPORTED_CMD, &psth);
 
     ESP_LOGI(TAG, "AVRCP TG initialised");
     return ESP_OK;

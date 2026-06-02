@@ -6,7 +6,6 @@
 #include "nvs_flash.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "esp_reset_reason.h"
 #include "driver/gpio.h"
 
 #include "config.h"

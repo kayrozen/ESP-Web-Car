@@ -3,6 +3,7 @@
 #define AUDIO_PIPELINE_H
 
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
 #include "freertos/ringbuf.h"
 #include <stdbool.h>
 
