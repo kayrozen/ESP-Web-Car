@@ -17,7 +17,6 @@
 #include "esp_timer.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
-#include "esp_reset_reason.h"
 #include "esp_http_client.h"
 #include "nvs_flash.h"
 #include "nvs.h"
