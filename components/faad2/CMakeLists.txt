@@ -29,7 +29,6 @@ idf_component_register(
         "${FDK_ROOT}/libDRCdec/include"
         "${FDK_ROOT}/libSBRdec/include"
         "${FDK_ROOT}/libMpegTPDec/include"
-        "${FDK_ROOT}/libMpegTPEnc/include"
         "${FDK_ROOT}/libPCMutils/include"
         "${FDK_ROOT}/libFDK/include"
 )
