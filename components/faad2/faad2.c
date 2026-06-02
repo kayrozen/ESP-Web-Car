@@ -41,16 +41,10 @@ faad2_handle_t faad2_init(int disable_sbr)
 
     ctx->disable_sbr = disable_sbr;
 
-    if (disable_sbr) {
-        /* Disable SBR / PS upsample — saves ~30% CPU, stays at base-band rate */
-        aacDecoder_SetParam(ctx->handle, AAC_SBR_ENABLE, 0);
-    }
-
-    /* Downmix anything > 2ch to stereo */
+    /* Downmix anything > 2ch to stereo. SBR is controlled at build time
+       via CONFIG_AAC_DISABLE_SBR — no runtime param available in fdk-aac.
+       Output is interleaved INT_PCM by default. */
     aacDecoder_SetParam(ctx->handle, AAC_PCM_MAX_OUTPUT_CHANNELS, 2);
-
-    /* Output 16-bit PCM (default, but be explicit) */
-    aacDecoder_SetParam(ctx->handle, AAC_PCM_OUTPUT_INTERLEAVED, 1);
 
     ESP_LOGI(TAG, "fdk-aac decoder opened (SBR %s)",
              disable_sbr ? "disabled" : "enabled");
