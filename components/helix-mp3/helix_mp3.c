@@ -1,39 +1,26 @@
 /**
  * @file helix_mp3.c
- * @brief Stub Helix MP3 decoder.
+ * @brief Thin wrapper around the real Helix fixed-point MP3 decoder.
  *
- * Replace the stub bodies below with real HMP3Decoder calls once the
- * Helix MP3 source files (mp3dec.c, mp3common.c, mp3tabs.c, …) are
- * placed in this directory and added to CMakeLists.txt SRCS.
- *
- * Real API reference:
- *   HMP3Decoder MP3InitDecoder(void);
- *   void        MP3FreeDecoder(HMP3Decoder hMP3Decoder);
- *   int         MP3Decode(HMP3Decoder hMP3Decoder,
- *                         unsigned char **inbuf, int *bytesLeft,
- *                         short *outbuf, int useSize);
- *   void        MP3GetLastFrameInfo(HMP3Decoder hMP3Decoder,
- *                                   MP3FrameInfo *mp3FrameInfo);
+ * Maps the project's helix_mp3_* API onto the upstream
+ * MP3InitDecoder / MP3Decode / MP3FreeDecoder API.
  */
 
 #include "helix_mp3.h"
-#include <stdlib.h>
+#include "mp3dec.h"   /* Helix public API */
 #include <string.h>
 #include "esp_log.h"
 
 static const char *TAG = "helix_mp3";
 
-/* Placeholder struct — replaced by real HMP3Decoder when Helix is available */
-typedef struct {
-    int placeholder;
-} helix_mp3_ctx_t;
-
 helix_mp3_handle_t helix_mp3_init(void)
 {
-    helix_mp3_ctx_t *ctx = calloc(1, sizeof(helix_mp3_ctx_t));
-    if (!ctx) return NULL;
-    ESP_LOGW(TAG, "Helix MP3 stub — real Helix source not yet available");
-    return (helix_mp3_handle_t)ctx;
+    HMP3Decoder dec = MP3InitDecoder();
+    if (!dec) {
+        ESP_LOGE(TAG, "MP3InitDecoder() failed (out of memory)");
+        return NULL;
+    }
+    return (helix_mp3_handle_t)dec;
 }
 
 esp_err_t helix_mp3_decode_frame(helix_mp3_handle_t handle,
@@ -44,16 +31,40 @@ esp_err_t helix_mp3_decode_frame(helix_mp3_handle_t handle,
     if (!handle || !input || !pcm_out || !pcm_frames || !consumed)
         return ESP_ERR_INVALID_ARG;
 
-    /* Stub: output silence and consume all input */
-    int frames = (*pcm_frames < 1152) ? *pcm_frames : 1152;
-    memset(pcm_out, 0, frames * 2 * sizeof(int16_t));   /* stereo */
-    *pcm_frames = frames;
-    *consumed   = (input_len < 417) ? input_len : 417;   /* typical MP3 frame size */
+    HMP3Decoder dec = (HMP3Decoder)handle;
 
-    return ESP_ERR_NOT_SUPPORTED;
+    /* Find sync word before passing to decoder */
+    int offset = MP3FindSyncWord(input, input_len);
+    if (offset < 0) {
+        /* No valid frame in this buffer — caller should refill */
+        *pcm_frames = 0;
+        *consumed = input_len;
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    const unsigned char *buf_ptr = input + offset;
+    size_t bytes_left = (size_t)(input_len - offset);
+
+    int err = MP3Decode(dec, &buf_ptr, &bytes_left, pcm_out, 0);
+
+    if (err != ERR_MP3_NONE && err != ERR_MP3_MAINDATA_UNDERFLOW) {
+        ESP_LOGW(TAG, "MP3Decode error %d", err);
+        *pcm_frames = 0;
+        *consumed = input_len;   /* skip bad frame */
+        return ESP_FAIL;
+    }
+
+    MP3FrameInfo info;
+    MP3GetLastFrameInfo(dec, &info);
+
+    *pcm_frames = info.outputSamps / (info.nChans > 0 ? info.nChans : 1);
+    *consumed = (int)(input_len - (int)bytes_left);
+
+    return ESP_OK;
 }
 
 void helix_mp3_deinit(helix_mp3_handle_t handle)
 {
-    free(handle);
+    if (handle)
+        MP3FreeDecoder((HMP3Decoder)handle);
 }

@@ -76,57 +76,35 @@ Toutes ces options sont pré-configurées dans `sdkconfig.defaults` ; un simple 
 
 ## 4. Drop-in des composants audio tiers
 
-Les trois composants audio (`helix-mp3`, `faad2`, `speexdsp`) sont livrés en **stubs compilables** : le projet build et tourne immédiatement, mais sort du silence à la place de l'audio décodé. Pour activer l'audio réel, déposer les sources upstream comme décrit ci-dessous.
+**Helix MP3 est déjà intégré** — les sources réelles sont présentes dans `components/helix-mp3/` (téléchargées depuis [chmorgan/libhelix-mp3](https://github.com/chmorgan/libhelix-mp3), open-source RealNetworks 2005, RPSL/RCSL). Le décodeur MP3 est fonctionnel sans aucune manipulation.
 
-La source de référence pour les trois composants est **[squeezelite-esp32](https://github.com/sle118/squeezelite-esp32)** (`components/squeezelite/` et `components/`).
+Les deux composants restants (`faad2`, `speexdsp`) sont encore des stubs compilables. Pour activer l'audio AAC et le resampling réel, suivre les instructions ci-dessous.
 
 ---
 
-### 4.1 Helix MP3
+### 4.1 Helix MP3 — INTÉGRÉ ✓
 
-**Source upstream** : [ralekseenkov/helix-mp3](https://github.com/RealAleC/helix-mp3) ou `components/squeezelite/` dans squeezelite-esp32.
-
-**Fichiers à copier dans `components/helix-mp3/`** :
+Les sources Helix complètes sont déjà dans `components/helix-mp3/` :
 
 ```
-mp3dec.c
-mp3dec.h
-mp3common.c
-mp3common.h
-huffman.c
-hufftabs.c
-imdct.c
-scalefac.c
-polyphase.c
-bitstream.c
-dequant.c
-dct32.c
-real/          (dossier complet si présent)
+components/helix-mp3/
+├── helix_mp3.c          ← wrapper → API interne du projet
+├── mp3dec.c             ← top-level decoder (RealNetworks)
+├── mp3tabs.c            ← lookup tables
+├── pub/
+│   ├── mp3dec.h         ← API publique Helix
+│   ├── mp3common.h      ← structures internes
+│   └── statname.h       ← name mangling (linking statique)
+└── real/
+    ├── assembly.h       ← inline asm (Xtensa/ESP32 supporté nativement)
+    ├── coder.h          ← structures internes décodeur
+    ├── bitstream.c / buffers.c / dct32.c / dequant.c
+    ├── dqchan.c / huffman.c / hufftabs.c / imdct.c
+    ├── polyphase.c / scalfact.c / stproc.c
+    ├── subband.c / trigtabs.c
 ```
 
-**Mettre à jour `components/helix-mp3/CMakeLists.txt`** :
-
-```cmake
-idf_component_register(
-    SRCS
-        "helix_mp3.c"
-        "mp3dec.c"
-        "mp3common.c"
-        "huffman.c"
-        "hufftabs.c"
-        "imdct.c"
-        "scalefac.c"
-        "polyphase.c"
-        "bitstream.c"
-        "dequant.c"
-        "dct32.c"
-    INCLUDE_DIRS
-        "include"
-        "."
-)
-```
-
-**Remplacer le stub dans `helix_mp3.c`** — les fonctions `helix_mp3_init`, `helix_mp3_decode_frame`, `helix_mp3_deinit` doivent appeler `MP3InitDecoder`, `MP3Decode`, `MP3FreeDecoder` de l'API Helix. Voir le header `components/helix-mp3/include/helix_mp3.h` pour la signature exacte attendue par le pipeline.
+**Aucune action requise.** Le wrapper `helix_mp3.c` appelle directement `MP3InitDecoder` / `MP3Decode` / `MP3FreeDecoder`.
 
 ---
 
