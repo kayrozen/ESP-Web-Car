@@ -24,16 +24,9 @@
 #include "esp_ota_ops.h"
 #include "esp_https_ota.h"
 #include "esp_task_wdt.h"
-#include "esp_app_desc.h"
+/* esp_app_desc.h may not exist in all IDF 4.4 versions; use esp_ota_ops.h */
 
 static const char *TAG = "ota";
-
-/* ── OTA progress callback ───────────────────────────────────────────── */
-
-static void ota_http_event_handler(esp_http_client_event_t *evt)
-{
-    (void)evt;  /* We rely on esp_https_ota for progress tracking */
-}
 
 /* ── Perform OTA ─────────────────────────────────────────────────────── */
 
@@ -64,10 +57,12 @@ esp_err_t ota_perform_update(const char *url)
         return err;
     }
 
-    /* Fetch the app description to log version info */
+    /* Fetch the app description to log version info (IDF 4.4+) */
     esp_app_desc_t new_app_info;
     if (esp_https_ota_get_img_desc(ota_handle, &new_app_info) == ESP_OK) {
         ESP_LOGI(TAG, "New firmware version: %s", new_app_info.version);
+    } else {
+        ESP_LOGD(TAG, "Could not read new app descriptor");
     }
 
     /* Download and write in a loop */
@@ -125,6 +120,15 @@ esp_err_t ota_mark_valid(void)
 
 const char *ota_get_app_version(void)
 {
-    const esp_app_desc_t *desc = esp_app_get_description();
-    return desc ? desc->version : "unknown";
+    /* IDF 4.4: esp_ota_get_app_description() returns a pointer to the
+       currently running app's description stored in flash. */
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (!running) return "unknown";
+    esp_app_desc_t desc;
+    if (esp_ota_get_partition_description(running, &desc) == ESP_OK) {
+        static char version_buf[32];
+        strlcpy(version_buf, desc.version, sizeof(version_buf));
+        return version_buf;
+    }
+    return "unknown";
 }

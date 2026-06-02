@@ -28,9 +28,6 @@ static const char *TAG = "http_stream";
 static volatile audio_format_t s_format       = AUDIO_FORMAT_UNKNOWN;
 static volatile bool           s_running       = false;
 static TaskHandle_t            s_task_handle   = NULL;
-static char                    s_url[STORAGE_URL_MAX_HTTP];
-
-#define STORAGE_URL_MAX_HTTP  CARRADIO_HTTP_BUF_SIZE
 
 /* ── Format detection ────────────────────────────────────────────────── */
 
