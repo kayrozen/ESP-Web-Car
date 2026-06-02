@@ -56,19 +56,23 @@ esp_err_t wifi_start_softap(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
 
-    wifi_config_t ap_cfg = {
-        .ap = {
-            .ssid            = CARRADIO_SOFTAP_SSID,
-            .ssid_len        = strlen(CARRADIO_SOFTAP_SSID),
-            .channel         = CARRADIO_SOFTAP_CHANNEL,
-            .password        = "",
-            .max_connection  = CARRADIO_SOFTAP_MAX_CONN,
-            .authmode        = WIFI_AUTH_OPEN,
-        },
-    };
+    /* Build SSID: "<device_name>-Setup" or "CarRadio-Setup" as fallback */
+    char ap_ssid[33] = CARRADIO_SOFTAP_SSID;
+    char dev_name[STORAGE_DEVICE_NAME_MAX] = {0};
+    if (storage_get_device_name(dev_name, sizeof(dev_name)) == ESP_OK && dev_name[0]) {
+        snprintf(ap_ssid, sizeof(ap_ssid), "%s-Setup", dev_name);
+    }
+
+    wifi_config_t ap_cfg = {0};
+    strlcpy((char *)ap_cfg.ap.ssid, ap_ssid, sizeof(ap_cfg.ap.ssid));
+    ap_cfg.ap.ssid_len       = (uint8_t)strlen(ap_ssid);
+    ap_cfg.ap.channel        = CARRADIO_SOFTAP_CHANNEL;
+    ap_cfg.ap.max_connection = CARRADIO_SOFTAP_MAX_CONN;
+    ap_cfg.ap.authmode       = WIFI_AUTH_OPEN;
+
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI(TAG, "SoftAP started: SSID=%s", CARRADIO_SOFTAP_SSID);
+    ESP_LOGI(TAG, "SoftAP started: SSID=%s", ap_ssid);
     return ESP_OK;
 }
 

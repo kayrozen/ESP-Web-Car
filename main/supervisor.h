@@ -12,6 +12,8 @@ typedef enum {
     AVRC_CMD_PLAY,
     AVRC_CMD_PAUSE,
     AVRC_CMD_STOP,
+    AVRC_CMD_NEXT_STATION,
+    AVRC_CMD_PREV_STATION,
 } avrc_cmd_t;
 
 /**

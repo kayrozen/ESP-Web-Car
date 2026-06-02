@@ -17,6 +17,8 @@ idf_component_register(
         "device_identity.c"
         "telemetry.c"
         "command_poll.c"
+        "provisioning_serial.c"
+        "playlist.c"
     INCLUDE_DIRS
         "."
     REQUIRES
@@ -39,6 +41,7 @@ idf_component_register(
         esp_timer
         mbedtls
         json
+        cjson
         helix-mp3
         faad2
         speexdsp

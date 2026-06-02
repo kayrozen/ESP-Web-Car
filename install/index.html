@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CarRadio Installer</title>
+  <script
+    type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+  ></script>
+  <style>
+    :root {
+      --bg:        #1a1a2e;
+      --bg2:       #16213e;
+      --bg3:       #0f3460;
+      --accent:    #e94560;
+      --accent2:   #4ecca3;
+      --text:      #eeeeee;
+      --muted:     #aaaaaa;
+      --border:    #2a2a4e;
+      --radius:    8px;
+      --shadow:    0 4px 24px rgba(0,0,0,0.4);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 48px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header h1 {
+      font-size: 2em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    header p {
+      color: var(--muted);
+      font-size: 0.95em;
+    }
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      width: 100%;
+      max-width: 540px;
+      margin-bottom: 20px;
+    }
+    .step-label {
+      font-size: 0.75em;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent2);
+      margin-bottom: 6px;
+    }
+    h2 {
+      font-size: 1.1em;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 0.85em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    input[type="text"], input[type="url"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 1em;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--accent2); }
+    input.error  { border-color: var(--accent); }
+    .hint {
+      font-size: 0.78em;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .hint.err { color: var(--accent); }
+
+    /* ── Station list ── */
+    #station-list {
+      list-style: none;
+      margin-bottom: 12px;
+    }
+    #station-list li {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: grab;
+      transition: background 0.15s;
+    }
+    #station-list li:active { cursor: grabbing; }
+    #station-list li.drag-over { border-color: var(--accent2); background: #1a3a5e; }
+    .station-info { flex: 1; min-width: 0; }
+    .station-name { font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .station-meta { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
+    .station-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1.1em;
+      padding: 2px 4px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .station-remove:hover { color: var(--accent); background: rgba(233,69,96,0.1); }
+    .drag-handle { color: var(--muted); font-size: 1em; cursor: grab; user-select: none; }
+
+    /* ── Search results ── */
+    #search-wrapper { position: relative; }
+    #search-results {
+      position: absolute;
+      top: 100%;
+      left: 0; right: 0;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-height: 260px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: var(--shadow);
+    }
+    .result-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      gap: 10px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    .result-item:hover { background: var(--bg3); }
+    .result-item:last-child { border-bottom: none; }
+    .result-flag { font-size: 1.2em; flex-shrink: 0; }
+    .result-info { flex: 1; min-width: 0; }
+    .result-name { font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-meta { font-size: 0.72em; color: var(--muted); }
+    .result-add {
+      background: var(--accent2);
+      color: var(--bg);
+      border: none;
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 0.8em;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── Custom URL collapsible ── */
+    details { margin-top: 12px; }
+    summary {
+      cursor: pointer;
+      font-size: 0.85em;
+      color: var(--accent2);
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    summary::-webkit-details-marker { display: none; }
+    .details-inner { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .row { display: flex; gap: 8px; }
+    .row input { flex: 1; }
+    .btn {
+      padding: 8px 16px;
+      background: var(--accent2);
+      color: var(--bg);
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.9em;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-secondary {
+      background: var(--bg3);
+      color: var(--text);
+    }
+    .counter {
+      font-size: 0.8em;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 4px;
+    }
+    .counter.full { color: var(--accent); }
+
+    /* ── Step 3 install ── */
+    #install-card { text-align: center; }
+    #install-card p { color: var(--muted); font-size: 0.9em; margin-bottom: 16px; }
+    esp-web-install-button {
+      --esp-tools-button-color: var(--accent);
+      --esp-tools-button-text-color: #fff;
+    }
+    .status-msg {
+      margin-top: 14px;
+      font-size: 0.9em;
+      color: var(--accent2);
+      min-height: 1.4em;
+    }
+    .status-msg.err { color: var(--accent); }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--muted);
+      border-top-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 480px) {
+      .card { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>&#127925; CarRadio</h1>
+    <p>Flash your ESP32 internet radio in three steps</p>
+  </header>
+
+  <!-- Step 1: Device Name -->
+  <div class="card" id="step1-card">
+    <div class="step-label">Step 1 of 3</div>
+    <h2>Name your device</h2>
+    <label for="device-name">Device name</label>
+    <input type="text" id="device-name" placeholder="kitchen-radio" autocomplete="off" spellcheck="false">
+    <div class="hint" id="name-hint">Lowercase letters, numbers and hyphens. 2–24 characters. Must start and end with a letter or number.</div>
+  </div>
+
+  <!-- Step 2: Playlist -->
+  <div class="card" id="step2-card">
+    <div class="step-label">Step 2 of 3</div>
+    <h2>Build your playlist <span class="counter" id="pl-counter">0 / 5</span></h2>
+
+    <ul id="station-list"></ul>
+
+    <div id="search-wrapper">
+      <label for="search-input">Search stations</label>
+      <input type="text" id="search-input" placeholder="Type to search radio stations…" autocomplete="off">
+      <div id="search-results" hidden></div>
+    </div>
+
+    <details id="custom-details">
+      <summary>
+        <span>&#10010;</span> Add custom URL
+      </summary>
+      <div class="details-inner">
+        <div>
+          <label for="custom-name">Station name</label>
+          <input type="text" id="custom-name" placeholder="My Station">
+        </div>
+        <div>
+          <label for="custom-url">Stream URL (http:// or https://)</label>
+          <input type="url" id="custom-url" placeholder="http://stream.example.com/radio">
+        </div>
+        <button class="btn" id="custom-add-btn" onclick="addCustomStation()">Add</button>
+      </div>
+    </details>
+
+    <div id="geo-status" class="hint" style="margin-top:10px"></div>
+  </div>
+
+  <!-- Step 3: Install -->
+  <div class="card" id="install-card">
+    <div class="step-label">Step 3 of 3</div>
+    <h2>Connect &amp; Install</h2>
+    <p>Connect your ESP32 via USB, then click the button below.<br>
+    After flashing completes, your playlist and device name will be sent automatically.</p>
+    <esp-web-install-button id="install-btn" manifest="manifest.json">
+      <button slot="activate" class="btn" style="width:100%;padding:14px;font-size:1em">
+        &#9889; Connect &amp; Flash
+      </button>
+    </esp-web-install-button>
+    <div class="status-msg" id="install-status"></div>
+  </div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   Constants & state
+═══════════════════════════════════════════════════════════════ */
+const DEVICE_NAME_RE = /^[a-z0-9][a-z0-9-]{0,22}[a-z0-9]$/;
+const PLAYLIST_MAX   = 5;
+const APP_NAME       = 'CarRadio/1.0';
+const RB_SERVERS_URL = 'https://all.api.radio-browser.info/json/servers';
+
+let rbServer   = null;   // cached server base URL
+let playlist   = [];     // [{name, url, stationuuid, codec, bitrate, source}]
+let dragSrcIdx = null;
+
+/* ═══════════════════════════════════════════════════════════════
+   radio-browser.info server discovery
+═══════════════════════════════════════════════════════════════ */
+async function getRBServer() {
+  if (rbServer) return rbServer;
+  const cached = sessionStorage.getItem('rb_server');
+  if (cached) { rbServer = cached; return rbServer; }
+
+  try {
+    const res = await fetch(RB_SERVERS_URL);
+    const list = await res.json();
+    // Shuffle
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    for (const srv of list) {
+      const base = 'https://' + srv.name;
+      try {
+        const test = await fetch(base + '/json/config', { headers: {'x-app-name': APP_NAME} });
+        if (test.ok) {
+          rbServer = base;
+          sessionStorage.setItem('rb_server', base);
+          return rbServer;
+        }
+      } catch(_) {}
+    }
+  } catch(e) {
+    console.warn('RB server discovery failed:', e);
+  }
+  // Fallback to a known reliable server
+  rbServer = 'https://de1.api.radio-browser.info';
+  return rbServer;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Geolocation → country code
+   Small lat/lng bounding-box table for common countries.
+═══════════════════════════════════════════════════════════════ */
+const COUNTRY_BOXES = [
+  // [minLat, maxLat, minLng, maxLng, code]
+  [41.3, 51.1,  -5.1,   9.6, 'FR'],
+  [49.9, 60.8,  -8.2,   2.0, 'GB'],
+  [47.3, 55.1,   5.9,  15.0, 'DE'],
+  [36.0, 47.1,   6.6,  18.5, 'IT'],
+  [35.9, 44.0,  -9.5,   4.3, 'ES'],
+  [24.4, 49.4, -125.0, -66.9, 'US'],
+  [41.7, 83.1,  -141.0, -52.6, 'CA'],
+  [-43.6, -10.0, 113.0, 153.6, 'AU'],
+  [-34.8, -19.8, -73.6, -28.8, 'BR'],
+  [29.5,  53.6,  34.3,   73.0, 'IN'],
+  [29.4,  45.6,  25.1,   45.1, 'SA'],
+  [-34.8, -22.4,  16.4,  32.9, 'ZA'],
+  [35.2,  45.6,  25.8,   45.1, 'TR'],
+  [49.0,  70.1,  19.1,   68.9, 'PL'],
+  [37.0,  52.0,  14.1,   24.1, 'UA'],
+  [45.5,  70.1,   4.4,   31.0, 'SE'],
+  [54.6,  70.1,   4.1,   31.1, 'NO'],
+  [54.6,  57.8,   8.1,   15.2, 'DK'],
+  [59.8,  70.1,  20.6,   31.6, 'FI'],
+  [46.4,  55.8,  16.8,   40.5, 'RO'],
+  [47.7,  51.1,  12.1,   22.9, 'HU'],
+  [48.5,  51.1,  12.1,   22.6, 'CZ'],
+  [34.0,  42.3, 122.9,  153.9, 'JP'],
+  [22.0,  41.5, 113.5,  134.8, 'CN'],
+  [33.1,  38.6, 124.6,  132.0, 'KR'],
+  [1.3,   71.3,  92.1,  141.0, 'ID'],
+  [14.6,  20.5, -117.1,  -86.7, 'MX'],
+  [19.3,  22.0,  -74.5,  -72.0, 'HT'],
+  [40.3,  47.8,  36.0,   46.0, 'AZ'],
+];
+
+function latLngToCountry(lat, lng) {
+  for (const [minLat, maxLat, minLng, maxLng, code] of COUNTRY_BOXES) {
+    if (lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng) return code;
+  }
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Fallback curated stations
+═══════════════════════════════════════════════════════════════ */
+const FALLBACK_STATIONS = [
+  { name: 'FIP',                  url: 'https://icecast.radiofrance.fr/fip-hifi.aac',                        codec: 'AAC',  bitrate: 192, stationuuid: null, source: 'custom_url', country: '🇫🇷' },
+  { name: 'France Inter',         url: 'https://icecast.radiofrance.fr/franceinter-hifi.aac',                 codec: 'AAC',  bitrate: 192, stationuuid: null, source: 'custom_url', country: '🇫🇷' },
+  { name: 'BBC Radio 6',          url: 'http://stream.live.vc.bbcmedia.co.uk/bbc_6music',                     codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇬🇧' },
+  { name: 'Radio Paradise Mellow',url: 'http://stream.radioparadise.com/mellow-192',                          codec: 'MP3',  bitrate: 192, stationuuid: null, source: 'custom_url', country: '🇺🇸' },
+  { name: 'KEXP',                 url: 'http://live-mp3-128.kexp.org/',                                       codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇺🇸' },
+  { name: 'NTS Radio 1',         url: 'http://stream-relay-geo.ntslive.net/stream',                          codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇬🇧' },
+  { name: 'SomaFM Groove Salad',  url: 'http://ice2.somafm.com/groovesalad-128-mp3',                          codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇺🇸' },
+  { name: 'WFMU',                 url: 'http://stream0.wfmu.org/freeform-128k',                               codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇺🇸' },
+  { name: 'Radio Swiss Classic',  url: 'http://stream.srg-ssr.ch/rsc_de/mp3_128.m3u',                        codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇨🇭' },
+  { name: 'ABC Jazz',             url: 'http://live-radio01.mediahubaustralia.com/2JZZ/',                     codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇦🇺' },
+  { name: 'Deutschlandfunk Nova', url: 'http://st01.dlf.de/dlf/04/128/mp3/stream.mp3',                       codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇩🇪' },
+  { name: 'Radio Nova',           url: 'http://novazz.ice.infomaniak.ch/novazz-128.mp3',                      codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇫🇷' },
+  { name: 'WNYC',                 url: 'http://fm939.wnyc.org/wnycfm',                                        codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇺🇸' },
+  { name: 'Triple J',             url: 'http://live-radio01.mediahubaustralia.com/2TJW/',                     codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇦🇺' },
+  { name: 'NPR Music',            url: 'http://npr-ice.streamguys1.com/live.mp3',                             codec: 'MP3',  bitrate: 128, stationuuid: null, source: 'custom_url', country: '🇺🇸' },
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   Country flag from 2-letter ISO code
+═══════════════════════════════════════════════════════════════ */
+function countryFlag(cc) {
+  if (!cc || cc.length !== 2) return '🌐';
+  const offset = 0x1F1E6 - 65;
+  return String.fromCodePoint(cc.toUpperCase().charCodeAt(0) + offset)
+       + String.fromCodePoint(cc.toUpperCase().charCodeAt(1) + offset);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Playlist rendering
+═══════════════════════════════════════════════════════════════ */
+function renderPlaylist() {
+  const ul = document.getElementById('station-list');
+  ul.innerHTML = '';
+  playlist.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.draggable = true;
+    li.dataset.idx = i;
+
+    const meta = [s.codec, s.bitrate ? s.bitrate + ' kbps' : null]
+      .filter(Boolean).join(' · ');
+    const flag = s.country || (s.stationuuid ? '' : '');
+
+    li.innerHTML =
+      '<span class="drag-handle">&#9776;</span>' +
+      '<div class="station-info">' +
+        '<div class="station-name">' + (flag ? flag + ' ' : '') + escHtml(s.name) + '</div>' +
+        (meta ? '<div class="station-meta">' + escHtml(meta) + '</div>' : '') +
+      '</div>' +
+      '<button class="station-remove" title="Remove" onclick="removeStation(' + i + ')">&#10005;</button>';
+
+    li.addEventListener('dragstart', onDragStart);
+    li.addEventListener('dragover',  onDragOver);
+    li.addEventListener('drop',      onDrop);
+    li.addEventListener('dragend',   onDragEnd);
+    ul.appendChild(li);
+  });
+
+  const counter  = document.getElementById('pl-counter');
+  counter.textContent = playlist.length + ' / ' + PLAYLIST_MAX;
+  counter.classList.toggle('full', playlist.length >= PLAYLIST_MAX);
+
+  document.getElementById('search-input').disabled = playlist.length >= PLAYLIST_MAX;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function removeStation(i) {
+  playlist.splice(i, 1);
+  renderPlaylist();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Drag-to-reorder
+═══════════════════════════════════════════════════════════════ */
+function onDragStart(e) {
+  dragSrcIdx = +e.currentTarget.dataset.idx;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('#station-list li').forEach(el => el.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  const toIdx = +e.currentTarget.dataset.idx;
+  if (dragSrcIdx !== null && dragSrcIdx !== toIdx) {
+    const moved = playlist.splice(dragSrcIdx, 1)[0];
+    playlist.splice(toIdx, 0, moved);
+    renderPlaylist();
+  }
+}
+function onDragEnd() {
+  document.querySelectorAll('#station-list li').forEach(el => el.classList.remove('drag-over'));
+  dragSrcIdx = null;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Add station
+═══════════════════════════════════════════════════════════════ */
+function addStation(s) {
+  if (playlist.length >= PLAYLIST_MAX) return;
+  // Don't add duplicates by URL
+  if (playlist.some(p => p.url === s.url)) return;
+  playlist.push(s);
+  renderPlaylist();
+
+  // Report click to radio-browser
+  if (s.stationuuid && rbServer) {
+    fetch(rbServer + '/json/url/' + s.stationuuid, {
+      headers: { 'x-app-name': APP_NAME }
+    }).catch(() => {});
+  }
+}
+
+function addCustomStation() {
+  const name = document.getElementById('custom-name').value.trim();
+  const url  = document.getElementById('custom-url').value.trim();
+  if (!name || !url) { alert('Please enter both a name and a URL.'); return; }
+  if (!/^https?:\/\//.test(url)) { alert('URL must start with http:// or https://'); return; }
+  addStation({ name, url, stationuuid: null, codec: null, bitrate: null, source: 'custom_url', country: '' });
+  document.getElementById('custom-name').value = '';
+  document.getElementById('custom-url').value  = '';
+  document.getElementById('custom-details').removeAttribute('open');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Search
+═══════════════════════════════════════════════════════════════ */
+let searchTimer = null;
+
+document.getElementById('search-input').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  if (!q) { hideSearchResults(); return; }
+  searchTimer = setTimeout(() => doSearch(q), 300);
+});
+
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('search-wrapper').contains(e.target)) {
+    hideSearchResults();
+  }
+});
+
+function hideSearchResults() {
+  document.getElementById('search-results').hidden = true;
+  document.getElementById('search-results').innerHTML = '';
+}
+
+async function doSearch(q) {
+  const resultsEl = document.getElementById('search-results');
+  resultsEl.innerHTML = '<div class="result-item"><span class="spinner"></span> Searching…</div>';
+  resultsEl.hidden = false;
+
+  try {
+    const server = await getRBServer();
+    const params = new URLSearchParams({
+      name: q,
+      order: 'clickcount',
+      reverse: 'true',
+      limit: '20',
+      hidebroken: 'true',
+    });
+    const res = await fetch(server + '/json/stations/search?' + params, {
+      headers: { 'x-app-name': APP_NAME }
+    });
+    const stations = await res.json();
+    renderSearchResults(stations);
+  } catch(e) {
+    resultsEl.innerHTML = '<div class="result-item" style="color:var(--accent)">Search failed: ' + escHtml(String(e)) + '</div>';
+  }
+}
+
+function renderSearchResults(stations) {
+  const el = document.getElementById('search-results');
+  if (!stations.length) {
+    el.innerHTML = '<div class="result-item" style="color:var(--muted)">No results</div>';
+    return;
+  }
+  el.innerHTML = '';
+  stations.slice(0, 20).forEach(s => {
+    const url = s.url_resolved || s.url;
+    if (!url) return;
+    const flag = countryFlag(s.countrycode);
+    const meta = [s.codec, s.bitrate ? s.bitrate + ' kbps' : null].filter(Boolean).join(' · ');
+    const div = document.createElement('div');
+    div.className = 'result-item';
+    div.innerHTML =
+      '<span class="result-flag">' + flag + '</span>' +
+      '<div class="result-info">' +
+        '<div class="result-name">' + escHtml(s.name) + '</div>' +
+        (meta ? '<div class="result-meta">' + escHtml(meta) + '</div>' : '') +
+      '</div>' +
+      '<button class="result-add" disabled>+</button>';
+
+    const btn = div.querySelector('.result-add');
+    btn.disabled = (playlist.length >= PLAYLIST_MAX);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addStation({
+        name:        s.name,
+        url:         url,
+        stationuuid: s.stationuuid || null,
+        codec:       s.codec || null,
+        bitrate:     s.bitrate ? parseInt(s.bitrate) : null,
+        source:      'radio_browser',
+        country:     flag,
+      });
+      hideSearchResults();
+      document.getElementById('search-input').value = '';
+    });
+    el.appendChild(div);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Geolocation → local stations suggestions
+═══════════════════════════════════════════════════════════════ */
+async function loadLocalSuggestions() {
+  const statusEl = document.getElementById('geo-status');
+  statusEl.innerHTML = '<span class="spinner"></span> Loading suggestions…';
+
+  let countryCode = null;
+
+  if ('geolocation' in navigator) {
+    try {
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
+      countryCode = latLngToCountry(pos.coords.latitude, pos.coords.longitude);
+    } catch(_) {}
+  }
+
+  if (countryCode) {
+    statusEl.textContent = 'Showing popular stations in ' + countryFlag(countryCode) + ' ' + countryCode;
+    await showGeoStations(countryCode);
+  } else {
+    statusEl.textContent = 'Showing curated international stations';
+    showFallbackStations();
+  }
+}
+
+async function showGeoStations(cc) {
+  try {
+    const server = await getRBServer();
+    const params = new URLSearchParams({
+      countrycode: cc,
+      order: 'clickcount',
+      reverse: 'true',
+      limit: '10',
+      hidebroken: 'true',
+    });
+    const res = await fetch(server + '/json/stations/search?' + params, {
+      headers: { 'x-app-name': APP_NAME }
+    });
+    const stations = await res.json();
+    if (!stations.length) { showFallbackStations(); return; }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.marginTop = '10px';
+    const label = document.createElement('label');
+    label.textContent = 'Suggested stations near you';
+    wrapper.appendChild(label);
+
+    stations.slice(0, 8).forEach(s => {
+      const url = s.url_resolved || s.url;
+      if (!url) return;
+      const flag = countryFlag(s.countrycode);
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-secondary';
+      btn.style.cssText = 'width:auto;padding:6px 12px;margin:4px 4px 0 0;font-size:0.82em;font-weight:normal';
+      btn.textContent = flag + ' ' + s.name;
+      btn.addEventListener('click', () => {
+        addStation({
+          name:        s.name,
+          url:         url,
+          stationuuid: s.stationuuid || null,
+          codec:       s.codec || null,
+          bitrate:     s.bitrate ? parseInt(s.bitrate) : null,
+          source:      'radio_browser',
+          country:     flag,
+        });
+      });
+      wrapper.appendChild(btn);
+    });
+
+    document.getElementById('search-wrapper').before(wrapper);
+  } catch(e) {
+    showFallbackStations();
+  }
+}
+
+function showFallbackStations() {
+  const wrapper = document.createElement('div');
+  wrapper.style.marginTop = '10px';
+  const label = document.createElement('label');
+  label.textContent = 'Curated international stations';
+  wrapper.appendChild(label);
+
+  FALLBACK_STATIONS.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-secondary';
+    btn.style.cssText = 'width:auto;padding:6px 12px;margin:4px 4px 0 0;font-size:0.82em;font-weight:normal';
+    btn.textContent = (s.country || '') + ' ' + s.name;
+    btn.addEventListener('click', () => addStation({...s}));
+    wrapper.appendChild(btn);
+  });
+
+  document.getElementById('search-wrapper').before(wrapper);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Device name validation
+═══════════════════════════════════════════════════════════════ */
+document.getElementById('device-name').addEventListener('input', function() {
+  const valid = DEVICE_NAME_RE.test(this.value.trim());
+  this.classList.toggle('error', this.value.length > 0 && !valid);
+  const hint = document.getElementById('name-hint');
+  hint.classList.toggle('err', this.value.length > 0 && !valid);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   ESP Web Tools serial handoff
+═══════════════════════════════════════════════════════════════ */
+function buildProvisionPayload() {
+  const name = document.getElementById('device-name').value.trim();
+  if (!DEVICE_NAME_RE.test(name)) {
+    throw new Error('Invalid device name. Check Step 1.');
+  }
+  if (playlist.length === 0) {
+    throw new Error('Playlist is empty. Add at least one station in Step 2.');
+  }
+
+  const pl = playlist.map(s => ({
+    name:        s.name,
+    url:         s.url,
+    stationuuid: s.stationuuid || null,
+    codec:       s.codec || null,
+    bitrate:     s.bitrate || null,
+    source:      s.source || 'custom_url',
+  }));
+
+  return 'PROVISION:' + JSON.stringify({
+    provision_version: 1,
+    device_name: name,
+    playlist: pl,
+  }) + '\n';
+}
+
+async function sendProvisioning(port) {
+  const statusEl = document.getElementById('install-status');
+  statusEl.textContent = 'Sending provisioning data…';
+  statusEl.className = 'status-msg';
+
+  const payload = buildProvisionPayload();
+
+  const writer = port.writable.getWriter();
+  const encoder = new TextEncoder();
+  await writer.write(encoder.encode(payload));
+  writer.releaseLock();
+
+  // Wait for OK\n response (up to 10s)
+  const reader = port.readable.getReader();
+  let response = '';
+  const deadline = Date.now() + 10000;
+
+  try {
+    while (Date.now() < deadline) {
+      const { value, done } = await Promise.race([
+        reader.read(),
+        new Promise(res => setTimeout(() => res({ value: null, done: false }), 500)),
+      ]);
+      if (done) break;
+      if (value) {
+        response += new TextDecoder().decode(value);
+        if (response.includes('OK')) {
+          statusEl.textContent = '✓ Device provisioned successfully!';
+          statusEl.className = 'status-msg';
+          reader.releaseLock();
+          return;
+        }
+        if (response.includes('ERR:')) {
+          const errLine = response.match(/ERR:[^\n]*/)?.[0] || 'ERR:unknown';
+          throw new Error('Device rejected provisioning: ' + errLine);
+        }
+      }
+    }
+    throw new Error('Timed out waiting for device acknowledgement.');
+  } catch(e) {
+    reader.releaseLock();
+    throw e;
+  }
+}
+
+// Hook into ESP Web Tools state-changed event
+const installBtn = document.getElementById('install-btn');
+const statusEl   = document.getElementById('install-status');
+
+installBtn.addEventListener('state-changed', async (e) => {
+  const state = e.detail?.state;
+  if (!state) return;
+
+  if (state === 'finished') {
+    statusEl.textContent = 'Flash complete — sending provisioning…';
+    statusEl.className   = 'status-msg';
+
+    // Validate before opening serial
+    try { buildProvisionPayload(); } catch(err) {
+      statusEl.textContent = '⚠ ' + err.message;
+      statusEl.className   = 'status-msg err';
+      return;
+    }
+
+    // Open serial at 115200
+    let port;
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      await sendProvisioning(port);
+    } catch(err) {
+      statusEl.textContent = 'Serial error: ' + err.message;
+      statusEl.className   = 'status-msg err';
+    } finally {
+      if (port && port.readable) {
+        try { await port.close(); } catch(_) {}
+      }
+    }
+  } else if (state === 'error') {
+    statusEl.textContent = 'Flash failed. Check the connection and try again.';
+    statusEl.className   = 'status-msg err';
+  } else if (state === 'initializing' || state === 'flashing') {
+    // Validate inputs early so user is warned before flashing completes
+    try {
+      buildProvisionPayload();
+      statusEl.textContent = '';
+      statusEl.className   = 'status-msg';
+    } catch(err) {
+      statusEl.textContent = '⚠ ' + err.message + ' (fix before flash completes)';
+      statusEl.className   = 'status-msg err';
+    }
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   Init
+═══════════════════════════════════════════════════════════════ */
+renderPlaylist();
+loadLocalSuggestions();
+</script>
+</body>
+</html>

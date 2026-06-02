@@ -10,6 +10,7 @@
 #include "ota.h"
 #include "telemetry.h"
 #include "command_poll.h"
+#include "playlist.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -185,6 +186,8 @@ static void run_phase2(void)
     }
 }
 
+static playlist_t s_playlist;
+
 static void run_streaming(void)
 {
     ESP_LOGI(TAG, "Entering STREAMING mode");
@@ -236,8 +239,27 @@ static void run_streaming(void)
         vTaskDelay(pdMS_TO_TICKS(bt_backoff));
     }
 
+    /* Load playlist from NVS; fall back to legacy stream_url if empty */
+    playlist_load_from_nvs(&s_playlist);
+    if (s_playlist.count == 0) {
+        char legacy_url[STORAGE_URL_MAX] = {0};
+        esp_err_t lerr = storage_get_stream_url(legacy_url, sizeof(legacy_url));
+        if (lerr == ESP_OK && legacy_url[0]) {
+            ESP_LOGW(TAG, "No playlist — using legacy stream_url");
+            strlcpy(s_playlist.entries[0].url,  legacy_url, sizeof(s_playlist.entries[0].url));
+            strlcpy(s_playlist.entries[0].name, "Radio",    sizeof(s_playlist.entries[0].name));
+            s_playlist.count   = 1;
+            s_playlist.current = 0;
+        } else {
+            ESP_LOGE(TAG, "No playlist and no legacy URL — falling back to Phase 1");
+            storage_reset_phase();
+            esp_restart();
+        }
+    }
+
+    const playlist_entry_t *cur = playlist_current(&s_playlist);
     char stream_url[STORAGE_URL_MAX] = {0};
-    storage_get_stream_url(stream_url, sizeof(stream_url));
+    if (cur) strlcpy(stream_url, cur->url, sizeof(stream_url));
     audio_pipeline_start(stream_url);
 
     TickType_t stream_start = xTaskGetTickCount();
@@ -280,6 +302,30 @@ static void run_streaming(void)
                 case AVRC_CMD_STOP:
                     if (s_playback_state != PLAYBACK_STATE_HARD_PAUSED)
                         set_playback_state(PLAYBACK_STATE_HARD_PAUSED);
+                    break;
+                case AVRC_CMD_NEXT_STATION:
+                    playlist_next(&s_playlist);
+                    {
+                        const playlist_entry_t *nxt = playlist_current(&s_playlist);
+                        if (nxt) {
+                            ESP_LOGI(TAG, "Switching to next station: %s", nxt->name);
+                            audio_pipeline_hard_pause();
+                            audio_pipeline_start(nxt->url);
+                            set_playback_state(PLAYBACK_STATE_PLAYING);
+                        }
+                    }
+                    break;
+                case AVRC_CMD_PREV_STATION:
+                    playlist_prev(&s_playlist);
+                    {
+                        const playlist_entry_t *prv = playlist_current(&s_playlist);
+                        if (prv) {
+                            ESP_LOGI(TAG, "Switching to prev station: %s", prv->name);
+                            audio_pipeline_hard_pause();
+                            audio_pipeline_start(prv->url);
+                            set_playback_state(PLAYBACK_STATE_PLAYING);
+                        }
+                    }
                     break;
             }
         }

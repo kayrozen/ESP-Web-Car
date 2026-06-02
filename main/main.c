@@ -13,6 +13,7 @@
 #include "storage.h"
 #include "supervisor.h"
 #include "device_identity.h"
+#include "provisioning_serial.h"
 
 static const char *TAG = "main";
 
@@ -58,6 +59,8 @@ void app_main(void)
     esp_reset_reason_t reason = esp_reset_reason();
     ESP_LOGI(TAG, "Reset reason: %d", reason);
 
+    /* Serial provisioning window: must run before WiFi/BT init.
+       nvs_flash_init() is needed first so NVS writes succeed. */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOGW(TAG, "NVS flash init failed (%s) — erasing", esp_err_to_name(ret));
@@ -68,6 +71,9 @@ void app_main(void)
 
     ESP_ERROR_CHECK(storage_init());
     device_identity_init();   /* load/generate identity; no WiFi needed */
+
+    /* Wait for serial provisioning (up to 30s). Must run before WiFi/BT. */
+    provisioning_serial_wait();
 
     check_reset_button();
     apply_boot_fail_guard();

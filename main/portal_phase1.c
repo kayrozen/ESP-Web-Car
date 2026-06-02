@@ -13,6 +13,7 @@
 #include "portal_phase1.h"
 #include "config.h"
 #include "storage.h"
+#include "cJSON.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -108,7 +109,8 @@ static void dns_hijack_task(void *arg)
 
 /* ── HTML page ───────────────────────────────────────────────────────── */
 
-static const char *PAGE_HTML =
+/* PAGE_HTML is built dynamically in root_get_handler to include device name / playlist */
+static const char *PAGE_HTML_HEAD =
 "<!DOCTYPE html><html lang='en'><head>"
 "<meta charset='UTF-8'>"
 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -117,6 +119,7 @@ static const char *PAGE_HTML =
 "*{box-sizing:border-box;margin:0;padding:0}"
 "body{background:#1a1a2e;color:#eee;font-family:sans-serif;padding:20px}"
 "h1{color:#e94560;margin-bottom:20px;font-size:1.5em}"
+"h2{color:#4ecca3;font-size:1em;margin:16px 0 8px}"
 "label{display:block;margin:12px 0 4px;font-size:.9em;color:#aaa}"
 "input,select{width:100%;padding:12px;border:1px solid #333;border-radius:6px;"
 "background:#16213e;color:#eee;font-size:1em}"
@@ -125,16 +128,19 @@ static const char *PAGE_HTML =
 "button:active{background:#c73652}"
 "#scan-btn{background:#0f3460;margin-top:8px}"
 "#status{margin-top:12px;color:#4ecca3;font-size:.9em}"
+".playlist-list{list-style:none;margin:8px 0}"
+".playlist-list li{padding:8px;background:#16213e;border-radius:4px;"
+"margin-bottom:4px;font-size:.9em;color:#ccc}"
 "</style></head><body>"
-"<h1>&#127925; CarRadio Setup</h1>"
+"<h1>&#127925; CarRadio Setup</h1>";
+
+static const char *PAGE_HTML_FORM =
 "<form id='f' method='POST' action='/save'>"
 "<label>WiFi Network</label>"
 "<select id='ssid-sel' name='ssid'><option value=''>-- select --</option></select>"
 "<button type='button' id='scan-btn' onclick='scanWifi()'>&#128246; Scan</button>"
 "<label>WiFi Password</label>"
 "<input type='password' name='password' placeholder='leave empty for open network'>"
-"<label>Stream URL (http:// or https://)</label>"
-"<input type='url' name='url' placeholder='http://stream.example.com/radio' required>"
 "<button type='submit'>Save &amp; Continue &#8594;</button>"
 "</form>"
 "<div id='status'></div>"
@@ -203,7 +209,46 @@ static esp_err_t wifi_scan_handler(httpd_req_t *req)
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_sendstr(req, PAGE_HTML);
+    httpd_resp_sendstr_chunk(req, PAGE_HTML_HEAD);
+
+    /* Show device name if set */
+    char dev_name[STORAGE_DEVICE_NAME_MAX] = {0};
+    if (storage_get_device_name(dev_name, sizeof(dev_name)) == ESP_OK && dev_name[0]) {
+        char name_html[96];
+        snprintf(name_html, sizeof(name_html),
+                 "<p style='color:#aaa;font-size:.9em;margin-bottom:12px'>"
+                 "Device: <b style='color:#4ecca3'>%s</b></p>", dev_name);
+        httpd_resp_sendstr_chunk(req, name_html);
+    }
+
+    /* Show current playlist if available */
+    char playlist_json[2048] = {0};
+    if (storage_get_playlist_json(playlist_json, sizeof(playlist_json)) == ESP_OK && playlist_json[0]) {
+        httpd_resp_sendstr_chunk(req, "<h2>Current Playlist</h2><ul class='playlist-list'>");
+        /* Parse and list station names */
+        cJSON *arr = cJSON_Parse(playlist_json);
+        if (arr && cJSON_IsArray(arr)) {
+            cJSON *item;
+            int i = 0;
+            cJSON_ArrayForEach(item, arr) {
+                cJSON *nm = cJSON_GetObjectItemCaseSensitive(item, "name");
+                if (cJSON_IsString(nm)) {
+                    char li[128];
+                    snprintf(li, sizeof(li), "<li>%d. %s</li>", ++i, nm->valuestring);
+                    httpd_resp_sendstr_chunk(req, li);
+                }
+            }
+            cJSON_Delete(arr);
+        }
+        httpd_resp_sendstr_chunk(req, "</ul>");
+        httpd_resp_sendstr_chunk(req,
+            "<p style='color:#aaa;font-size:.85em;margin:8px 0 16px'>"
+            "Playlist was set during installation via the install page. "
+            "Re-flash to change it.</p>");
+    }
+
+    httpd_resp_sendstr_chunk(req, PAGE_HTML_FORM);
+    httpd_resp_sendstr_chunk(req, NULL);  /* end chunked */
     return ESP_OK;
 }
 
@@ -219,10 +264,9 @@ static esp_err_t save_post_handler(httpd_req_t *req)
     }
     body[ret] = '\0';
 
-    /* Parse URL-encoded body: ssid=...&password=...&url=... */
+    /* Parse URL-encoded body: ssid=...&password=... */
     char ssid[STORAGE_SSID_MAX]  = {0};
     char pass[STORAGE_PASS_MAX]  = {0};
-    char url[STORAGE_URL_MAX]    = {0};
 
     /* Simple key=value parser */
     char *p = body;
@@ -250,14 +294,13 @@ static esp_err_t save_post_handler(httpd_req_t *req)
             }
         }
 
-        if (strcmp(key, "ssid") == 0)     strlcpy(ssid, decoded, sizeof(ssid));
+        if (strcmp(key, "ssid") == 0)          strlcpy(ssid, decoded, sizeof(ssid));
         else if (strcmp(key, "password") == 0) strlcpy(pass, decoded, sizeof(pass));
-        else if (strcmp(key, "url") == 0)  strlcpy(url, decoded, sizeof(url));
 
         p = amp ? amp + 1 : NULL;
     }
 
-    ESP_LOGI(TAG, "Save: ssid='%s' url='%s'", ssid, url);
+    ESP_LOGI(TAG, "Save: ssid='%s'", ssid);
 
     /* Validate */
     if (!storage_validate_ssid(ssid)) {
@@ -266,17 +309,10 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         httpd_resp_sendstr(req, err_html);
         return ESP_OK;
     }
-    if (!storage_validate_url(url)) {
-        const char *err_html = "<html><body>Error: URL must start with http:// or https://. <a href='/'>Back</a></body></html>";
-        httpd_resp_set_status(req, "400 Bad Request");
-        httpd_resp_sendstr(req, err_html);
-        return ESP_OK;
-    }
 
     /* Persist */
     storage_set_wifi_ssid(ssid);
     storage_set_wifi_pass(pass);
-    storage_set_stream_url(url);
     storage_set_phase(CARRADIO_PHASE_BT);
 
     /* Respond then reboot */

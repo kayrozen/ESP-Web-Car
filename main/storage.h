@@ -58,6 +58,11 @@ esp_err_t storage_set_device_name(const char *name);
  */
 bool storage_is_phase_ready(void);
 
+/**
+ * @brief Read raw playlist JSON string from NVS.
+ */
+esp_err_t storage_get_playlist_json(char *buf, size_t len);
+
 /* ── Bluetooth device ────────────────────────────────────────────────── */
 
 esp_err_t storage_get_bt_name(char *buf, size_t len);

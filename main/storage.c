@@ -305,6 +305,13 @@ esp_err_t storage_set_device_name(const char *name)
     return nvs_commit(s_nvs_handle);
 }
 
+esp_err_t storage_get_playlist_json(char *buf, size_t len)
+{
+    if (nvs_open_rw() != ESP_OK) return ESP_FAIL;
+    size_t req = len;
+    return nvs_get_str(s_nvs_handle, NVS_KEY_PLAYLIST_JSON, buf, &req);
+}
+
 bool storage_is_phase_ready(void)
 {
     if (nvs_open_rw() != ESP_OK) return false;
