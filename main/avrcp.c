@@ -13,6 +13,7 @@
 
 #include "avrcp.h"
 #include "supervisor.h"
+#include "telemetry.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -85,6 +86,12 @@ static void avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *par
             if (kst != ESP_AVRC_PT_CMD_STATE_PRESSED) break;
 
             ESP_LOGI(TAG, "PASSTHROUGH key=0x%02x", key);
+            {
+                char pt_payload[48];
+                snprintf(pt_payload, sizeof(pt_payload),
+                         "{\"command\":\"0x%02x\",\"state\":%d}", key, kst);
+                telemetry_log("avrcp_passthrough", pt_payload);
+            }
             switch (key) {
                 case ESP_AVRC_PT_CMD_PLAY:
                     supervisor_avrcp_command(AVRC_CMD_PLAY);
@@ -216,6 +223,17 @@ void avrcp_publish_metadata(const char *title, const char *artist, const char *g
     if (artist) strlcpy(s_artist, artist, sizeof(s_artist));
     if (genre)  strlcpy(s_genre,  genre,  sizeof(s_genre));
     xSemaphoreGive(s_meta_mutex);
+
+    /* Log metadata push */
+    {
+        char meta_hash[33] = {0};
+        if (title) telemetry_hash_id(title, meta_hash, sizeof(meta_hash));
+        char payload[96];
+        snprintf(payload, sizeof(payload),
+                 "{\"title_hash\":\"%s\",\"has_artist\":%s}",
+                 meta_hash, (artist && artist[0]) ? "true" : "false");
+        telemetry_log("avrcp_metadata_sent", payload);
+    }
 
     /* Send track-change notification if car has registered for it */
     if (s_ntf_registered_mask & (1u << ESP_AVRC_RN_TRACK_CHANGE)) {

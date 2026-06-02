@@ -204,6 +204,89 @@ esp_err_t storage_set_boot_fail_count(uint8_t count)
     return nvs_commit(s_nvs_handle);
 }
 
+/* ── Device identity & telemetry ─────────────────────────────────────── */
+
+esp_err_t storage_get_device_id(char *buf, size_t len)
+{
+    if (nvs_open_rw() != ESP_OK) return ESP_FAIL;
+    size_t req = len;
+    return nvs_get_str(s_nvs_handle, NVS_KEY_DEVICE_ID, buf, &req);
+}
+
+esp_err_t storage_set_device_id(const char *id)
+{
+    esp_err_t err = nvs_open_rw();
+    if (err != ESP_OK) return err;
+    err = nvs_set_str(s_nvs_handle, NVS_KEY_DEVICE_ID, id);
+    if (err != ESP_OK) return err;
+    return nvs_commit(s_nvs_handle);
+}
+
+esp_err_t storage_get_api_key(char *buf, size_t len)
+{
+    if (nvs_open_rw() != ESP_OK) return ESP_FAIL;
+    size_t req = len;
+    return nvs_get_str(s_nvs_handle, NVS_KEY_API_KEY, buf, &req);
+}
+
+esp_err_t storage_set_api_key(const char *key)
+{
+    esp_err_t err = nvs_open_rw();
+    if (err != ESP_OK) return err;
+    err = nvs_set_str(s_nvs_handle, NVS_KEY_API_KEY, key);
+    if (err != ESP_OK) return err;
+    return nvs_commit(s_nvs_handle);
+}
+
+esp_err_t storage_get_tm_salt(char *buf, size_t len)
+{
+    if (nvs_open_rw() != ESP_OK) return ESP_FAIL;
+    size_t req = len;
+    return nvs_get_str(s_nvs_handle, NVS_KEY_TM_SALT, buf, &req);
+}
+
+esp_err_t storage_set_tm_salt(const char *salt)
+{
+    esp_err_t err = nvs_open_rw();
+    if (err != ESP_OK) return err;
+    err = nvs_set_str(s_nvs_handle, NVS_KEY_TM_SALT, salt);
+    if (err != ESP_OK) return err;
+    return nvs_commit(s_nvs_handle);
+}
+
+esp_err_t storage_get_api_base_url(char *buf, size_t len)
+{
+    if (nvs_open_rw() != ESP_OK) return ESP_FAIL;
+    size_t req = len;
+    return nvs_get_str(s_nvs_handle, NVS_KEY_API_BASE_URL, buf, &req);
+}
+
+esp_err_t storage_set_api_base_url(const char *url)
+{
+    esp_err_t err = nvs_open_rw();
+    if (err != ESP_OK) return err;
+    err = nvs_set_str(s_nvs_handle, NVS_KEY_API_BASE_URL, url);
+    if (err != ESP_OK) return err;
+    return nvs_commit(s_nvs_handle);
+}
+
+esp_err_t storage_get_tm_enabled(uint8_t *out)
+{
+    if (nvs_open_rw() != ESP_OK) return ESP_FAIL;
+    *out = 1; /* default enabled */
+    nvs_get_u8(s_nvs_handle, NVS_KEY_TM_ENABLED, out);
+    return ESP_OK;
+}
+
+esp_err_t storage_set_tm_enabled(bool enabled)
+{
+    esp_err_t err = nvs_open_rw();
+    if (err != ESP_OK) return err;
+    err = nvs_set_u8(s_nvs_handle, NVS_KEY_TM_ENABLED, enabled ? 1 : 0);
+    if (err != ESP_OK) return err;
+    return nvs_commit(s_nvs_handle);
+}
+
 /* ── Validation ──────────────────────────────────────────────────────── */
 
 bool storage_validate_ssid(const char *ssid)

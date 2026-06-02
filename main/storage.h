@@ -68,6 +68,24 @@ esp_err_t storage_get_bt_mac_bytes(uint8_t mac[6]);
 uint8_t   storage_get_boot_fail_count(void);
 esp_err_t storage_set_boot_fail_count(uint8_t count);
 
+/* ── Device identity & telemetry ─────────────────────────────────────── */
+
+esp_err_t storage_get_device_id(char *buf, size_t len);
+esp_err_t storage_set_device_id(const char *id);
+
+esp_err_t storage_get_api_key(char *buf, size_t len);
+esp_err_t storage_set_api_key(const char *key);
+
+esp_err_t storage_get_tm_salt(char *buf, size_t len);
+esp_err_t storage_set_tm_salt(const char *salt);
+
+esp_err_t storage_get_api_base_url(char *buf, size_t len);
+esp_err_t storage_set_api_base_url(const char *url);
+
+/* 0 = disabled, 1 = enabled (default 1) */
+esp_err_t storage_get_tm_enabled(uint8_t *out);
+esp_err_t storage_set_tm_enabled(bool enabled);
+
 /* ── Validation helpers ──────────────────────────────────────────────── */
 
 /**

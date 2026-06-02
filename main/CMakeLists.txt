@@ -14,6 +14,9 @@ idf_component_register(
         "aac_decode.c"
         "resample.c"
         "ota.c"
+        "device_identity.c"
+        "telemetry.c"
+        "command_poll.c"
     INCLUDE_DIRS
         "."
     REQUIRES
@@ -34,6 +37,8 @@ idf_component_register(
         spi_flash
         esp_system
         esp_timer
+        mbedtls
+        json
         helix-mp3
         faad2
         speexdsp

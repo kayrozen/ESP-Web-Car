@@ -8,6 +8,8 @@
 #include "portal_phase1.h"
 #include "portal_phase2.h"
 #include "ota.h"
+#include "telemetry.h"
+#include "command_poll.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -49,6 +51,10 @@ static void set_playback_state(playback_state_t new_state)
     if (old == new_state) return;
 
     s_playback_state = new_state;
+
+    char payload[64];
+    snprintf(payload, sizeof(payload), "{\"from\":%d,\"to\":%d}", old, new_state);
+    telemetry_log("state_transition", payload);
 
     switch (new_state) {
         case PLAYBACK_STATE_PLAYING:
@@ -167,6 +173,10 @@ static void run_phase2(void)
     }
 
     bluetooth_init();
+
+    telemetry_init();
+    command_poll_init();
+
     portal_phase2_start();
 
     while (1) {
@@ -205,6 +215,9 @@ static void run_streaming(void)
     }
     wifi_backoff = 0; wifi_fail_ms = 0;
 
+    telemetry_init();
+    command_poll_init();
+
     /* Connect A2DP with backoff */
     uint8_t mac[6];
     if (storage_get_bt_mac_bytes(mac) != ESP_OK) {
@@ -237,6 +250,18 @@ static void run_streaming(void)
         if (s_reboot_requested) {
             ESP_LOGW(TAG, "Reboot requested");
             esp_restart();
+        }
+
+        /* OTA update requested via command_poll */
+        char ota_url[STORAGE_URL_MAX];
+        if (command_poll_consume_ota_url(ota_url, sizeof(ota_url)) && ota_url[0]) {
+            char payload[STORAGE_URL_MAX + 32];
+            snprintf(payload, sizeof(payload),
+                     "{\"phase\":\"begin\",\"url\":\"%s\"}", ota_url);
+            telemetry_log("ota_event", payload);
+            ESP_LOGI(TAG, "OTA update from: %s", ota_url);
+            ota_perform_update(ota_url); /* reboots on success */
+            telemetry_log("ota_event", "{\"phase\":\"failed\"}");
         }
 
         /* Process AVRCP commands from the BT stack */

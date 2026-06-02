@@ -12,6 +12,7 @@
 
 #include "ota.h"
 #include "config.h"
+#include "telemetry.h"
 
 #include <string.h>
 
@@ -35,6 +36,7 @@ esp_err_t ota_perform_update(const char *url)
     if (!url || strlen(url) == 0) return ESP_ERR_INVALID_ARG;
 
     ESP_LOGI(TAG, "Starting OTA from: %s", url);
+    telemetry_log("ota_event", "{\"phase\":\"begin\"}");
 
     /* Unsubscribe from WDT during OTA — flash writes can be slow */
     esp_task_wdt_delete(NULL);
@@ -90,13 +92,16 @@ esp_err_t ota_perform_update(const char *url)
     err = esp_https_ota_finish(ota_handle);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "OTA succeeded — rebooting to new firmware");
+        telemetry_log("ota_event", "{\"phase\":\"complete\"}");
         vTaskDelay(pdMS_TO_TICKS(500));
         esp_restart();
         /* Does not return */
     } else if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
         ESP_LOGE(TAG, "OTA image validation failed");
+        telemetry_log("ota_event", "{\"phase\":\"validate_failed\"}");
     } else {
         ESP_LOGE(TAG, "esp_https_ota_finish error: %s", esp_err_to_name(err));
+        telemetry_log("ota_event", "{\"phase\":\"finish_failed\"}");
     }
 
     esp_task_wdt_add(NULL);

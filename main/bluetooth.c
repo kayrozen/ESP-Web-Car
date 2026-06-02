@@ -11,6 +11,7 @@
 #include "config.h"
 #include "audio_pipeline.h"
 #include "avrcp.h"
+#include "telemetry.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -83,9 +84,21 @@ static void a2dp_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             if (param->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
                 s_connected = true;
                 ESP_LOGI(TAG, "A2DP connected");
+                char peer_hash[33];
+                char mac_str[18];
+                snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                         param->conn_stat.remote_bda[0], param->conn_stat.remote_bda[1],
+                         param->conn_stat.remote_bda[2], param->conn_stat.remote_bda[3],
+                         param->conn_stat.remote_bda[4], param->conn_stat.remote_bda[5]);
+                telemetry_hash_id(mac_str, peer_hash, sizeof(peer_hash));
+                char payload[80];
+                snprintf(payload, sizeof(payload),
+                         "{\"event\":\"connected\",\"peer_mac_hash\":\"%s\"}", peer_hash);
+                telemetry_log("bt_event", payload);
             } else if (param->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
                 s_connected = false;
                 ESP_LOGW(TAG, "A2DP disconnected");
+                telemetry_log("bt_event", "{\"event\":\"disconnected\"}");
             }
             break;
 

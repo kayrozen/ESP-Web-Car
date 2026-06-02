@@ -67,18 +67,37 @@
 #define CARRADIO_OTA_BUF_SIZE       4096
 
 /* ── Config version ──────────────────────────────────────────────────── */
-#define CARRADIO_CONFIG_VERSION     1
+#define CARRADIO_CONFIG_VERSION     2
 
 /* ── Task stack sizes ────────────────────────────────────────────────── */
 #define TASK_STACK_SUPERVISOR       4096
 #define TASK_STACK_HTTP_STREAM      8192
 #define TASK_STACK_DECODE           8192
 #define TASK_STACK_PORTAL           6144
+#define TASK_STACK_TELEMETRY        6144
+#define TASK_STACK_CMD_POLL         7168
 
 /* ── Task priorities ─────────────────────────────────────────────────── */
 #define TASK_PRIO_SUPERVISOR        3
 #define TASK_PRIO_HTTP_STREAM       5
 #define TASK_PRIO_DECODE            6
 #define TASK_PRIO_PORTAL            4
+#define TASK_PRIO_TELEMETRY         2
+#define TASK_PRIO_CMD_POLL          2
+
+/* ── Telemetry / Identity ────────────────────────────────────────────── */
+#define NVS_KEY_DEVICE_ID           "device_id"
+#define NVS_KEY_API_KEY             "api_key"
+#define NVS_KEY_TM_SALT             "tm_salt"
+#define NVS_KEY_TM_ENABLED          "tm_enabled"
+#define NVS_KEY_API_BASE_URL        "api_base_url"
+
+#define TELEMETRY_API_BASE_DEFAULT  "https://tm.plaquetournante.art"
+#define TELEMETRY_RAM_RING_SIZE     64
+#define TELEMETRY_LOG_SLOTS         256
+#define TELEMETRY_EVENT_MAX         384
+#define TELEMETRY_FLUSH_BATCH       50
+#define TELEMETRY_FLUSH_INTERVAL_MS 10000
+#define COMMAND_POLL_INTERVAL_MS    30000
 
 #endif /* CONFIG_H */

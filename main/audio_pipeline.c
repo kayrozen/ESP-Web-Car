@@ -17,9 +17,11 @@
 #include "mp3_decode.h"
 #include "aac_decode.h"
 #include "resample.h"
+#include "telemetry.h"
 
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -127,6 +129,14 @@ static void decode_task(void *arg)
                                              sizeof(input_buf));
         if (!item || received == 0) {
             /* Underrun — write silence to keep A2DP happy */
+            static uint32_t s_underrun_count = 0;
+            s_underrun_count++;
+            /* Log every 10th underrun to avoid flooding telemetry */
+            if (s_underrun_count % 10 == 1) {
+                char pl[40];
+                snprintf(pl, sizeof(pl), "{\"count\":%"PRIu32"}", s_underrun_count);
+                telemetry_log("audio_underrun", pl);
+            }
             write_silence(512);
             continue;
         }

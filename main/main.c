@@ -12,6 +12,7 @@
 #include "config.h"
 #include "storage.h"
 #include "supervisor.h"
+#include "device_identity.h"
 
 static const char *TAG = "main";
 
@@ -66,6 +67,7 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     ESP_ERROR_CHECK(storage_init());
+    device_identity_init();   /* load/generate identity; no WiFi needed */
 
     check_reset_button();
     apply_boot_fail_guard();

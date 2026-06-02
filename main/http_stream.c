@@ -18,6 +18,7 @@
 #include "audio_pipeline.h"
 #include "supervisor.h"
 #include "avrcp.h"
+#include "telemetry.h"
 
 #include <string.h>
 #include <strings.h>
@@ -140,6 +141,16 @@ static void process_icy_meta(icy_state_t *icy)
 
     if (title[0] == '\0') return;
     if (strcmp(title, icy->last_title) == 0) return;   /* deduplicate */
+
+    {
+        char title_hash[33] = {0};
+        telemetry_hash_id(title, title_hash, sizeof(title_hash));
+        char payload[96];
+        snprintf(payload, sizeof(payload),
+                 "{\"title_hash\":\"%s\",\"len\":%zu,\"parse_ok\":true}",
+                 title_hash, strlen(title));
+        telemetry_log("icy_title", payload);
+    }
 
     strlcpy(icy->last_title, title, sizeof(icy->last_title));
 
@@ -454,11 +465,20 @@ static void http_stream_task(void *arg)
         /* Request ICY metadata */
         esp_http_client_set_header(client, "Icy-MetaData", "1");
 
+        TickType_t stream_start_tick = xTaskGetTickCount();
         esp_err_t err = esp_http_client_perform(client);
 
         if (err == ESP_OK) {
             int status = esp_http_client_get_status_code(client);
             ESP_LOGI(TAG, "HTTP %d, format=%d", status, ctx.detected_format);
+
+            {
+                char payload[128];
+                snprintf(payload, sizeof(payload),
+                         "{\"status\":%d,\"format\":%d,\"metaint\":%d}",
+                         status, ctx.detected_format, ctx.icy.metaint);
+                telemetry_log("stream_open", payload);
+            }
 
             if (ctx.is_playlist && ctx.playlist_len > 0) {
                 char resolved[256] = {0};
@@ -476,6 +496,16 @@ static void http_stream_task(void *arg)
             backoff = supervisor_backoff_reset();
         } else {
             ESP_LOGW(TAG, "HTTP fetch error: %s", esp_err_to_name(err));
+        }
+
+        {
+            uint32_t duration_ms = (uint32_t)((xTaskGetTickCount() - stream_start_tick)
+                                               * portTICK_PERIOD_MS);
+            char payload[80];
+            snprintf(payload, sizeof(payload),
+                     "{\"reason\":\"%s\",\"duration_ms\":%"PRIu32"}",
+                     (err == ESP_OK) ? "end_of_stream" : "error", duration_ms);
+            telemetry_log("stream_close", payload);
         }
 
         esp_http_client_cleanup(client);
