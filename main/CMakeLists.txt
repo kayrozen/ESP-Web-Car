@@ -41,7 +41,6 @@ idf_component_register(
         esp_timer
         mbedtls
         json
-        cjson
         helix-mp3
         faad2
         speexdsp
