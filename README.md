@@ -108,26 +108,29 @@ components/helix-mp3/
 
 ---
 
-### 4.2 FAAD2 (AAC-LC / HE-AAC) — INTÉGRÉ ✓
+### 4.2 fdk-aac (AAC-LC / HE-AAC v1/v2) — INTÉGRÉ ✓
 
-Les sources FAAD2 complètes sont dans `components/faad2/` (téléchargées depuis [knik0/faad2](https://github.com/knik0/faad2), GPL v2) :
+Le décodeur AAC est [Fraunhofer FDK AAC](https://github.com/mstorsjo/fdk-aac) (licence Fraunhofer — libre pour usage non-commercial) :
 
 ```
 components/faad2/
-├── faad2.c              ← wrapper → API interne du projet
+├── faad2.c              ← wrapper → API interne du projet (interface inchangée)
 ├── include/
-│   └── neaacdec.h       ← API publique FAAD2
-└── libfaad/
-    ├── decoder.c / bits.c / cfft.c / common.c / syntax.c ...  (38 .c)
-    ├── sbr_dec.c / sbr_qmf.c / sbr_syntax.c ...               (SBR — compilé mais désactivé par défaut)
-    └── structs.h / common.h / ... (48 .h)
+│   └── faad2.h          ← API publique du projet (faad2_init/decode/deinit)
+└── fdk-aac/
+    ├── libAACdec/       ← décodeur AAC principal (29 .cpp)
+    ├── libSBRdec/       ← SBR / HE-AAC v1 (19 .cpp)
+    ├── libDRCdec/       ← Dynamic Range Control (9 .cpp)
+    ├── libArithCoding/  ← codage arithmétique xHE-AAC (1 .cpp)
+    ├── libMpegTPDec/    ← parsing ADTS/ADIF (6 .cpp)
+    ├── libPCMutils/     ← downmix, limiter (3 .cpp)
+    ├── libFDK/          ← DSP bas-niveau Fraunhofer (25 .cpp)
+    └── libSYS/          ← couche système (2 .cpp)
 ```
 
-**Aucune action requise.** `faad2.c` appelle `NeAACDecOpen` → `NeAACDecInit` → `NeAACDecDecode2`.
+**Aucune action requise.** `faad2.c` appelle `aacDecoder_Open(TT_MP4_ADTS)` → `aacDecoder_Fill` → `aacDecoder_DecodeFrame`.
 
-**SBR** : contrôlé par `CONFIG_AAC_DISABLE_SBR` dans `sdkconfig.defaults` (activé = SBR off = ~30% CPU en moins). Pour activer le SBR complet, changer la valeur dans `sdkconfig.defaults` puis rebuildez.
-
-> **Licence GPL v2** : FAAD2 est GPL, ce qui impose des obligations de distribution des sources pour tout produit commercial. Alternative libre : [fdk-aac](https://github.com/mstorsjo/fdk-aac) (licence Fraunhofer, plus permissive pour usage non-commercial).
+**SBR** : contrôlé par `CONFIG_AAC_DISABLE_SBR` dans `sdkconfig.defaults`. Avec SBR désactivé (`aacDecoder_SetParam(AAC_SBR_ENABLE, 0)`), HE-AAC se décode à la fréquence de base (~30% CPU en moins). À activer si le budget CPU le permet.
 
 ---
 
