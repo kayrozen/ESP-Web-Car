@@ -31,8 +31,8 @@ jobs:
       - name: Collect binaries
         run: |
           mkdir -p install/firmware
-          cp build/carradio.bin          install/firmware/carradio.bin
-          cp build/bootloader/bootloader.bin install/firmware/bootloader.bin
+          cp build/esp_web_car.bin              install/firmware/esp_web_car.bin
+          cp build/bootloader/bootloader.bin    install/firmware/bootloader.bin
           cp build/partition_table/partition-table.bin install/firmware/partition-table.bin
 
       - uses: actions/upload-artifact@v4

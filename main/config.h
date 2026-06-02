@@ -1,8 +1,4 @@
 #pragma once
-
-#ifndef CONFIG_H
-#define CONFIG_H
-
 #include <stdint.h>
 
 /* ── NVS ─────────────────────────────────────────────────────────────── */
@@ -13,7 +9,7 @@
 #define NVS_KEY_PHASE               "phase"
 #define NVS_KEY_WIFI_SSID           "wifi_ssid"
 #define NVS_KEY_WIFI_PASS           "wifi_pass"
-#define NVS_KEY_STREAM_URL          "stream_url"
+#define NVS_KEY_STREAM_URL          "stream_url"    /* legacy — migrated to playlist_json */
 #define NVS_KEY_BT_NAME             "bt_name"
 #define NVS_KEY_BT_MAC              "bt_mac"
 #define NVS_KEY_BOOT_FAIL_COUNT     "boot_fails"
@@ -103,4 +99,3 @@
 #define TELEMETRY_FLUSH_INTERVAL_MS 10000
 #define COMMAND_POLL_INTERVAL_MS    30000
 
-#endif /* CONFIG_H */

@@ -1,15 +1,3 @@
-/**
- * @file portal_phase1.c
- * @brief SoftAP captive portal — Phase 1: collect WiFi credentials + stream URL.
- *
- * Serves an HTTP server on port 80.
- * DNS hijack redirects all queries to 192.168.4.1 (captive portal pattern).
- * Endpoints:
- *   GET  /           → HTML setup page
- *   GET  /wifi_scan  → JSON array of nearby SSIDs
- *   POST /save       → validate + store SSID / password / URL, set phase=PHASE_BT, reboot
- */
-
 #include "portal_phase1.h"
 #include "config.h"
 #include "storage.h"

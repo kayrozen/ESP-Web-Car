@@ -142,7 +142,7 @@ static void check_heap_health(void)
 
 static void run_phase1(void)
 {
-    ESP_LOGI(TAG, "Entering PHASE 1 — WiFi + URL portal (SoftAP)");
+    ESP_LOGI(TAG, "Entering PHASE 1 — WiFi credentials portal (SoftAP)");
     wifi_start_softap();
     portal_phase1_start();
     /* Blocks until the user submits credentials and device reboots */

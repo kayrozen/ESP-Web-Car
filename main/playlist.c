@@ -1,8 +1,3 @@
-/**
- * @file playlist.c
- * @brief Playlist management: NVS persistence, navigation.
- */
-
 #include "playlist.h"
 #include "config.h"
 

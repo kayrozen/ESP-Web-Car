@@ -5,9 +5,9 @@
     {
       "chipFamily": "ESP32",
       "parts": [
-        {"path": "bootloader.bin", "offset": 4096},
-        {"path": "partition-table.bin", "offset": 32768},
-        {"path": "carradio.bin", "offset": 131072}
+        {"path": "firmware/bootloader.bin", "offset": 4096},
+        {"path": "firmware/partition-table.bin", "offset": 32768},
+        {"path": "firmware/esp_web_car.bin", "offset": 131072}
       ]
     }
   ]

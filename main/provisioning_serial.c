@@ -1,16 +1,3 @@
-/**
- * @file provisioning_serial.c
- * @brief Serial provisioning: waits on UART0 for a PROVISION: JSON line.
- *
- * Called very early in app_main (before WiFi/BT).
- * Listens for up to 30 seconds for a line of the form:
- *   PROVISION:{"provision_version":1,"device_name":"...","playlist":[...]}\n
- *
- * On success: writes device_name and playlist_json to NVS, prints "OK\n".
- * On error:   prints "ERR:<reason>\n", returns false.
- * On timeout: returns false silently.
- */
-
 #include "provisioning_serial.h"
 #include "config.h"
 
@@ -36,10 +23,6 @@ static const char *TAG = "prov_serial";
 
 /* ── Validation ──────────────────────────────────────────────────────── */
 
-/**
- * Validate device name: ^[a-z0-9][a-z0-9-]{0,22}[a-z0-9]$
- * (total length 2-24 characters)
- */
 static bool validate_device_name(const char *name)
 {
     if (!name) return false;
@@ -192,7 +175,7 @@ bool provisioning_serial_wait(void)
         .parity     = UART_PARITY_DISABLE,
         .stop_bits  = UART_STOP_BITS_1,
         .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,
+        .source_clk = UART_SCLK_APB,
     };
     uart_driver_install(UART_NUM_0, PROV_LINE_MAX * 2, 0, 0, NULL, 0);
     uart_param_config(UART_NUM_0, &uart_cfg);

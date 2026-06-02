@@ -127,10 +127,14 @@ bool wifi_is_connected(void)
 
 esp_err_t wifi_mdns_init(void)
 {
+    char hostname[STORAGE_DEVICE_NAME_MAX] = {0};
+    if (storage_get_device_name(hostname, sizeof(hostname)) != ESP_OK || !hostname[0]) {
+        strlcpy(hostname, CARRADIO_MDNS_HOSTNAME, sizeof(hostname));
+    }
     mdns_init();
-    mdns_hostname_set(CARRADIO_MDNS_HOSTNAME);
-    mdns_instance_name_set(CARRADIO_MDNS_INSTANCE);
+    mdns_hostname_set(hostname);
+    mdns_instance_name_set(hostname);
     mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    ESP_LOGI(TAG, "mDNS: %s.local", CARRADIO_MDNS_HOSTNAME);
+    ESP_LOGI(TAG, "mDNS: %s.local", hostname);
     return ESP_OK;
 }

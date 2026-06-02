@@ -8,8 +8,9 @@ Firmware ESP-IDF pour streamer une radio internet sur une enceinte Bluetooth, co
 
 - [Matériel](#matériel)
 - [Prérequis](#prérequis)
-- [Build et flash](#build-et-flash)
+- [Page d'installation](#page-dinstallation)
 - [Premier démarrage](#premier-démarrage)
+- [Changer de station](#changer-de-station)
 - [Reset de configuration](#reset-de-configuration)
 - [Mise à jour OTA](#mise-à-jour-ota)
 - [Architecture technique](#architecture-technique)
@@ -31,15 +32,12 @@ Firmware ESP-IDF pour streamer une radio internet sur une enceinte Bluetooth, co
 > **WROOM : non compatible** — pas de PSRAM, coexistence WiFi+BT+audio impossible.
 > **ESP32-S3 : non compatible** — pas de Bluetooth Classic (BR/EDR), donc pas d'A2DP.
 
-Le module WROVER-E-N8R8 est le seul choix valide : PSRAM obligatoire pour les buffers audio et la coexistence radio, 8 MB flash pour le schéma A/B OTA avec image factory de secours.
-
 ---
 
 ## Prérequis
 
 - **ESP-IDF v4.4.x** — [guide d'installation Espressif](https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32/get-started/index.html)
 - Python 3.8+, CMake 3.16+
-- Extension VS Code **ESP-IDF** (optionnel, recommandé pour menuconfig graphique et flash/monitor intégrés)
 
 ```bash
 idf.py --version   # doit afficher ESP-IDF v4.4.x
@@ -47,53 +45,71 @@ idf.py --version   # doit afficher ESP-IDF v4.4.x
 
 ---
 
-## Build et flash
+## Page d'installation
 
-Toutes les options sdkconfig sont pré-configurées dans `sdkconfig.defaults` (PSRAM, BT, coexistence, TWDT, brownout, OTA, flash 8 MB). Aucun menuconfig manuel nécessaire.
+La configuration initiale (choix des stations, nom du device) se fait via la **page d'installation** hébergée sur GitHub Pages, **avant** de brancher le device.
 
-```bash
-git clone <repo-url> esp32-car-radio
-cd esp32-car-radio
+### Flux d'installation
 
-idf.py set-target esp32
-idf.py build
-idf.py -p /dev/ttyUSB0 flash monitor
+```
+1. Ouvrir la page d'installation dans Chrome ou Edge
+   (Web Serial API requise — pas Firefox)
+
+2. Étape 1 — Nommer le device
+   Ex: "kitchen-radio" → deviendra kitchen-radio-Setup (SoftAP)
+   et kitchen-radio.local (mDNS)
+
+3. Étape 2 — Construire la playlist (1–5 stations)
+   • Suggestions locales via géolocalisation + radio-browser.info
+   • Recherche en direct
+   • URL personnalisée possible
+   • Glisser-déposer pour réordonner
+
+4. Étape 3 — Brancher le device, cliquer "Connect & Install"
+   • Flash du firmware via ESP Web Tools
+   • Envoi automatique de la config sur le port série :
+     PROVISION:{...}\n → le device répond OK\n
 ```
 
-Le binaire compile à ~1.5–2 MB, confortable dans les slots OTA de 2.5 MB.
+La page est déployée automatiquement via GitHub Actions à chaque push sur `main`. Pour l'activer : **Settings → Pages → Source → GitHub Actions**.
 
-Pour les flashes suivants :
+### Re-provisioning
 
-```bash
-idf.py -p /dev/ttyUSB0 flash          # flash seul
-idf.py -p /dev/ttyUSB0 monitor        # monitor série seul
-```
-
-> **Note :** La table de partitions a été mise à jour pour le schéma 8 MB complet (factory + ota_0 + ota_1 + storage + log). Un premier flash complet est nécessaire lors de la migration depuis l'ancienne table.
+Ré-exécuter la page d'installation sur un device déjà flashé remplace la playlist sans re-flasher le firmware. Le device écoute sur le port série pendant **30 secondes** à chaque boot.
 
 ---
 
 ## Premier démarrage
 
-Le setup se fait entièrement depuis un navigateur, en deux phases. SoftAP et Bluetooth Classic ne peuvent pas coexister sur l'ESP32, d'où cette séquence.
+### Phase 1 — WiFi (SoftAP, Bluetooth OFF)
 
-### Phase 1 — WiFi et URL du flux
+1. Le device démarre en point d'accès `<device-name>-Setup` (ex: `kitchen-radio-Setup`)
+2. Se connecter à ce réseau — le portail captif s'ouvre automatiquement
+3. Si le portail ne s'ouvre pas : aller sur `http://192.168.4.1`
+4. Choisir le réseau WiFi, entrer le mot de passe
+5. La playlist provisionnée à l'install s'affiche en lecture seule pour confirmation
+6. Appuyer sur **Enregistrer & Continuer** — le device redémarre
 
-1. Le device démarre en point d'accès WiFi `CarRadio-Setup`
-2. Se connecter à ce réseau depuis le téléphone — le portail captif s'ouvre automatiquement sur iOS et Android
-3. Si le portail ne s'ouvre pas automatiquement : aller sur `http://192.168.4.1`
-4. Choisir le réseau WiFi (hotspot), entrer le mot de passe, entrer l'URL du flux radio
-5. Appuyer sur **Connecter & Continuer** — le device redémarre
-
-### Phase 2 — Appairage Bluetooth
+### Phase 2 — Appairage Bluetooth (WiFi STA, Bluetooth ON)
 
 1. Le device se connecte au hotspot en mode STA
-2. Aller sur `http://carradio.local` (ou l'IP affichée dans le monitor série)
+2. Aller sur `http://<device-name>.local` (ex: `http://kitchen-radio.local`)
 3. Appuyer sur **Scanner** et attendre ~8 secondes
-4. Sélectionner l'enceinte dans la liste, appuyer sur **Appairer & Terminer**
+4. Sélectionner l'enceinte, appuyer sur **Appairer & Terminer**
 5. Le device redémarre et entre en mode streaming automatique
 
 À partir de là, tous les démarrages suivants sont entièrement automatiques.
+
+---
+
+## Changer de station
+
+La playlist (jusqu'à 5 stations) est navigable via les boutons **Suivant / Précédent** AVRCP de l'autoradio. Le device déclare le support de ces commandes dans le filtre passthrough AVRCP au démarrage.
+
+- **Suivant** (`ESP_AVRC_PT_CMD_FORWARD`) → station suivante (boucle)
+- **Précédent** (`ESP_AVRC_PT_CMD_BACKWARD`) → station précédente (boucle)
+
+L'index courant est persisté en NVS à chaque changement : le device reprend la dernière station après un redémarrage.
 
 ---
 
@@ -105,13 +121,13 @@ Maintenir le bouton **BOOT (GPIO0)** pendant **3 secondes** au démarrage. La co
 
 ## Mise à jour OTA
 
-Aller sur `http://carradio.local` → onglet **Firmware**.
+Aller sur `http://<device-name>.local` → onglet **Firmware**.
 
 **Upload manuel** : sélectionner un `.bin` → flash du slot inactif → redémarrage → confirmation automatique après 60 secondes de streaming.
 
 **Pull depuis URL** : entrer une URL HTTPS vers le binaire signé → même séquence.
 
-Si la nouvelle firmware plante ou ne parvient pas à streamer dans les 60 secondes, le bootloader revient automatiquement au slot précédent. Si les deux slots sont corrompus, l'image factory (portail WiFi minimal + OTA) prend le relais.
+Si la nouvelle firmware plante ou ne stream pas dans les 60 secondes, le bootloader revient automatiquement au slot précédent.
 
 ---
 
@@ -141,10 +157,6 @@ Internet (HTTP)
 Enceinte Bluetooth
 ```
 
-Les deux ring buffers PSRAM découplent le débit WiFi du débit Bluetooth et absorbent les interruptions dues au time-slicing de la coexistence radio. Ils sont alloués une seule fois au démarrage et réutilisés à travers tous les reconnects.
-
-Le format de sortie A2DP est fixe : **44100 Hz / stéréo / 16-bit**. Le resampler est donc obligatoire — sans lui, un flux AAC à 48000 Hz jouerait 8.8 % trop vite.
-
 ### Répartition des cœurs
 
 ```
@@ -158,17 +170,13 @@ A2DP Source Task                HTTP Client Task
                                 Command Poll Task (prio 2)
 ```
 
-Placer les deux stacks radio sur des cœurs opposés est la technique clé qui rend la coexistence stable — c'est ce que fait squeezelite-esp32 et ce qu'Arduino ne peut pas faire. Les tâches télémétrie et command poll tournent à priorité basse (2) et ne perturbent jamais l'audio.
-
 ### Ordre d'initialisation en mode streaming
 
-Bluetooth s'initialise **avant** WiFi. Le contrôleur BT doit réserver sa PSRAM avant que le stack WiFi commence ses allocations. L'ordre inverse peut laisser des blocs PSRAM insuffisants pour le BT.
+Bluetooth s'initialise **avant** WiFi. Le contrôleur BT doit réserver sa PSRAM avant que le stack WiFi commence ses allocations.
 
 ---
 
 ## Résilience
-
-Le device est conçu pour fonctionner sans surveillance, perdre l'alimentation à chaque cycle d'allumage, opérer dans un environnement RF bruité, et ne jamais nécessiter un câble USB pour récupérer d'une situation de blocage.
 
 | Situation | Détection | Récupération |
 |---|---|---|
@@ -178,162 +186,64 @@ Le device est conçu pour fonctionner sans surveillance, perdre l'alimentation �
 | Hotspot pas encore disponible | Timeout connect WiFi | Backoff silencieux, retry |
 | WiFi coupé en streaming | Événement WiFi | Pause + reconnect exponentiel |
 | Enceinte hors portée / éteinte | Callback A2DP disconnect | Pause + reconnect exponentiel |
+| Toutes les stations mortes | Erreur stream 3× | Auto-skip à la suivante |
 | Serveur stream inaccessible | Erreur / EOF HTTP | Réouverture + re-resolve playlist |
 | Buffer underrun | Ring buffer vide | Silence, reconnect si fréquent |
 | Config invalide au démarrage | Validation NVS au boot | Retour au portail de la phase concernée |
 | Fragmentation heap | Seuil `esp_get_free_heap_size` | Restart contrôlé |
 | OTA cassante | Pas de confirmation 60 s | Rollback automatique bootloader |
 | Deux slots OTA corrompus | Bootloader | Démarrage sur image factory |
-| Serveur télémétrie indisponible | Erreur HTTP flush | Retry au prochain intervalle, audio non affecté |
-
-Le backoff exponentiel suit le même schéma partout : 1 s, 2 s, 4 s … plafonné à 30 s, puis redémarrage propre après 5 minutes d'échec total.
 
 ---
 
 ## Télémétrie
 
-La télémétrie est **opt-out** et activée par défaut. Elle ne touche jamais au pipeline audio — les tâches flush et command poll sont best-effort, à priorité basse.
+La télémétrie est **opt-out** et activée par défaut. Elle ne touche jamais au pipeline audio.
 
-### Ce qui est collecté
+### Événements collectés
 
-| Type d'événement | Déclencheur | Identifiants transmis |
-|---|---|---|
-| `boot` | Chaque démarrage | reset_reason, free_heap |
-| `state_transition` | Machine d'état playback | from, to |
-| `bt_event` | Connexion / déconnexion A2DP | MAC hashée (sel par device) |
-| `avrcp_passthrough` | Commande play/pause/stop | code touche |
-| `avrcp_metadata_sent` | Push métadonnées vers la voiture | hash du titre |
-| `icy_title` | Nouveau titre ICY parsé | hash du titre, longueur |
-| `stream_open` | Ouverture flux HTTP | code HTTP, format, metaint |
-| `stream_close` | Fermeture flux | raison, durée |
-| `audio_underrun` | Ring buffer vide | compteur (1 log / 10 underruns) |
-| `ota_event` | Phases OTA | phase (begin/complete/failed) |
+| Type | Déclencheur |
+|---|---|
+| `boot` | Chaque démarrage |
+| `state_transition` | Machine d'état playback |
+| `bt_event` | Connexion / déconnexion A2DP |
+| `avrcp_passthrough` | Commande play/pause/stop/next/prev |
+| `avrcp_metadata_sent` | Push métadonnées vers la voiture |
+| `icy_title` | Nouveau titre ICY parsé |
+| `stream_open` | Ouverture flux HTTP |
+| `stream_close` | Fermeture flux |
+| `audio_underrun` | Ring buffer vide |
+| `ota_event` | Phases OTA |
+| `provisioning_received` | Provisioning série réussi |
+| `station_switch` | Changement de station AVRCP |
+| `station_play_started` | Démarrage streaming d'une station |
+| `station_play_ended` | Fin streaming d'une station |
 
-Les MACs Bluetooth et les SSIDs WiFi sont hachés avec un sel aléatoire par device avant d'être transmis. Le sel ne quitte jamais le device — les hashes sont irréversibles côté serveur.
+Les MACs Bluetooth et SSIDs WiFi sont hachés avec un sel par device avant transmission. Aucune donnée personnelle, aucun mot de passe.
 
-### Ce qui n'est jamais collecté
-
-- Mot de passe WiFi
-- Localisation
-- Contenu audio
-- MACs Bluetooth brutes
-- Données personnelles
-
-### Architecture du système de télémétrie
-
-```
-Device (ESP32)                       Serveur (tm.plaquetournante.art)
-──────────────────────────           ──────────────────────────────────
-device_identity.c                    Caddy (TLS auto Let's Encrypt)
-  UUID + api_key en NVS                │
-  argon2id hash côté serveur           ▼
-                                     Go API
-telemetry.c                            POST /api/v1/register
-  ring buffer RAM 64 events            POST /api/v1/sessions
-  log NVS 256 events (partition        POST /api/v1/events  ←── flush 10s
-  "log" 192 KB)                        GET  /api/v1/commands ←─ poll 30s
-  flush toutes les 10s si WiFi         POST /api/v1/uploads
-  SHA-256(sel+raw) pour hashes         │
-                                       ▼
-command_poll.c                       PostgreSQL
-  poll GET /api/v1/commands            events, sessions, devices,
-  upload_full_log → dump JSON          device_commands, full_log_uploads
-  force_ota_check → supervisor         │
-  set_config → NVS                     ▼
-  restart → esp_restart()           Grafana
-                                     Fleet overview
-                                     Session drilldown
-                                     Issue patterns
-```
-
-### Opt-out et suppression des données
-
-Dans le portail Phase 2, décocher **"Aide à l'amélioration de CarRadio"** pour désactiver l'envoi au serveur. Le log local continue de fonctionner.
-
-Pour supprimer toutes les données du serveur : bouton **Supprimer mes données** dans le portail, ou `POST /api/v1/delete`. La suppression est immédiate et cascade sur tous les événements, sessions et fichiers uploadés.
-
-### Déploiement du serveur
-
-Le stack complet est dans `telemetry-server/` — un seul `docker-compose.yml` pour Portainer.
+### Architecture serveur
 
 ```
 telemetry-server/
-├── docker-compose.yml        Caddy + Go API + Postgres + Grafana
-├── Caddyfile                 TLS auto, basic auth sur /grafana
-├── schema.sql                Appliqué automatiquement au premier démarrage Postgres
-├── .env.example              5 variables à configurer dans Portainer
-├── api/
-│   ├── Dockerfile            Build multi-stage → image FROM scratch (~15 MB)
-│   └── main.go               API complète, ~360 lignes
-├── grafana-provisioning/     Datasource + 3 dashboards provisionnés
-└── static/privacy.html       Page vie privée publique
+├── docker-compose.yml   Caddy + Go API + Postgres + Grafana
+├── Caddyfile
+├── schema.sql
+├── .env.example
+├── api/main.go          POST /register, /sessions, /events; GET /commands
+└── grafana-provisioning/
 ```
-
-Variables Portainer à définir (voir `.env.example`) :
-
-| Variable | Génération |
-|---|---|
-| `POSTGRES_PASSWORD` | `openssl rand -base64 32` |
-| `ADMIN_TOKEN` | `openssl rand -hex 32` |
-| `GRAFANA_PASSWORD` | mot de passe libre |
-| `GRAFANA_BASIC_HASH` | `docker run --rm caddy:2-alpine caddy hash-password --plaintext 'pass'` |
-| `API_VERSION` | tag image Docker, `latest` pour toujours tirer le dernier build |
 
 ---
 
 ## Composants audio
 
-Les trois décodeurs et le resampler sont intégrés directement dans le dépôt avec leurs sources réelles. Aucune manipulation n'est nécessaire.
+| Composant | Source | Rôle |
+|---|---|---|
+| Helix MP3 | [chmorgan/libhelix-mp3](https://github.com/chmorgan/libhelix-mp3) | Décodage MP3 fixed-point Xtensa |
+| fdk-aac | [mstorsjo/fdk-aac](https://github.com/mstorsjo/fdk-aac) | AAC-LC / HE-AAC (SBR désactivé par défaut) |
+| SpeexDSP | [xiph/speexdsp](https://github.com/xiph/speexdsp) | Resample → 44100 Hz, qualité 4, fixed-point |
 
-### Helix MP3
-
-Sources : [chmorgan/libhelix-mp3](https://github.com/chmorgan/libhelix-mp3) — RealNetworks open-source 2005 (RPSL/RCSL).
-
-`assembly.h` inclut nativement la voie Xtensa (instructions `mulsh` et `abs`) — le décodage fixed-point est optimal sur ESP32 sans patch supplémentaire.
-
-```
-components/helix-mp3/
-├── helix_mp3.c          ← wrapper (MP3InitDecoder / MP3Decode / MP3FreeDecoder)
-├── mp3dec.c / mp3tabs.c
-├── pub/                 ← mp3dec.h, mp3common.h, statname.h
-└── real/                ← 13 .c + assembly.h + coder.h
-```
-
-### fdk-aac (AAC-LC / HE-AAC v1/v2 / xHE-AAC)
-
-Sources : [mstorsjo/fdk-aac](https://github.com/mstorsjo/fdk-aac) — licence Fraunhofer (libre pour usage non-commercial).
-
-Build décodeur uniquement — les libs encodeur, SAC et MPEG-TP encodeur sont exclus.
-
-```
-components/faad2/
-├── faad2.c              ← wrapper (aacDecoder_Open / Fill / DecodeFrame)
-├── include/faad2.h      ← API publique du projet
-└── fdk-aac/
-    ├── libAACdec/       29 .cpp  décodeur AAC principal
-    ├── libSBRdec/       19 .cpp  HE-AAC v1/v2 (SBR + PS)
-    ├── libDRCdec/        9 .cpp  Dynamic Range Control
-    ├── libFDK/          25 .cpp  DSP bas-niveau Fraunhofer
-    ├── libMpegTPDec/     6 .cpp  parsing ADTS/ADIF
-    ├── libPCMutils/      3 .cpp  downmix + limiter
-    ├── libArithCoding/   1 .cpp  xHE-AAC
-    └── libSYS/           2 .cpp  couche système
-```
-
-Le SBR est contrôlé par `CONFIG_AAC_DISABLE_SBR` dans `sdkconfig.defaults`. Avec SBR désactivé, HE-AAC se décode à la fréquence de base (économie d'environ 30 % de CPU, utile sous coexistence WiFi+BT).
-
-### SpeexDSP
-
-Sources : [xiph/speexdsp](https://github.com/xiph/speexdsp) — BSD 3-Clause.
-
-Mode fixed-point (`FLOATING_POINT=0`), qualité 4 — équilibre audio/CPU recommandé par squeezelite-esp32.
-
-```
-components/speexdsp/
-├── speexdsp_resampler.c     ← wrapper (speex_resampler_init / process)
-├── include/
-└── libspeexdsp/             ← resample.c + speex_resampler.h + headers arch
-```
+Le format de sortie A2DP est fixe : **44100 Hz / stéréo / 16-bit**. Le resampler est obligatoire — un flux AAC à 48000 Hz jouerait 8.8 % trop vite sans lui.
 
 ---
 
@@ -342,39 +252,56 @@ components/speexdsp/
 ```
 esp32-car-radio/
 ├── CMakeLists.txt
-├── partitions.csv               ← table 8 MB : factory + A/B OTA + storage + log
-├── sdkconfig.defaults           ← toute la config sdkconfig prête à l'emploi
+├── partitions.csv              table 8 MB : factory + A/B OTA + storage + log
+├── sdkconfig.defaults          config sdkconfig prête à l'emploi
 ├── main/
-│   ├── main.c                   ← app_main, boot-fail guard, bouton BOOT, dispatch
-│   ├── config.h                 ← constantes, GPIO, tailles buffers, timeouts, clés NVS
-│   ├── storage.c / .h           ← NVS : lecture/écriture, validation, phase, identité
-│   ├── supervisor.c / .h        ← machine d'état, backoff, surveillance heap, WDT, OTA check
-│   ├── wifi.c / .h              ← SoftAP, STA, reconnect, mDNS
-│   ├── portal_phase1.c / .h     ← Phase 1 : SoftAP + DNS hijack + formulaire WiFi/URL
-│   ├── portal_phase2.c / .h     ← Phase 2 : serveur HTTP STA + scan BT + page OTA
-│   ├── bluetooth.c / .h         ← A2DP source, scan GAP, connect par MAC, log bt_event
-│   ├── avrcp.c / .h             ← AVRCP TG, passthrough play/pause/stop, métadonnées
-│   ├── http_stream.c / .h       ← fetch HTTP, résolution m3u/pls, ICY metadata, log stream_*
-│   ├── audio_pipeline.c / .h    ← ring buffers PSRAM, tasks, dispatch, underrun
-│   ├── mp3_decode.c / .h        ← wrapper Helix
-│   ├── aac_decode.c / .h        ← wrapper fdk-aac
-│   ├── resample.c / .h          ← wrapper SpeexDSP
-│   ├── ota.c / .h               ← OTA A/B, confirmation rollback, log ota_event
-│   ├── device_identity.c / .h   ← UUID + api_key + sel NVS, POST /register
-│   ├── telemetry.c / .h         ← ring buffer, log NVS, flush task, hash_id SHA-256
-│   └── command_poll.c / .h      ← poll commands, upload_full_log, force_ota, set_config
+│   ├── main.c                  app_main, boot-fail guard, bouton BOOT
+│   ├── config.h                constantes, GPIO, tailles buffers, clés NVS
+│   ├── storage.c / .h          NVS : lecture/écriture, validation, phase
+│   ├── provisioning_serial.c/h UART0 listener 30s → PROVISION: JSON → NVS
+│   ├── playlist.c / .h         playlist 5 stations, NVS persist, next/prev
+│   ├── supervisor.c / .h       machine d'états, backoff, WDT, OTA check
+│   ├── wifi.c / .h             SoftAP, STA, reconnect, mDNS (device_name.local)
+│   ├── portal_phase1.c / .h    Phase 1 : SoftAP + DNS hijack + formulaire WiFi
+│   ├── portal_phase2.c / .h    Phase 2 : serveur HTTP STA + scan BT + OTA
+│   ├── bluetooth.c / .h        A2DP source, scan GAP, connect par MAC
+│   ├── avrcp.c / .h            AVRCP TG, passthrough play/pause/stop/next/prev
+│   ├── http_stream.c / .h      fetch HTTP, résolution m3u/pls, ICY metadata
+│   ├── audio_pipeline.c / .h   ring buffers PSRAM, tasks, dispatch, underrun
+│   ├── mp3_decode.c / .h       wrapper Helix
+│   ├── aac_decode.c / .h       wrapper fdk-aac
+│   ├── resample.c / .h         wrapper SpeexDSP
+│   ├── ota.c / .h              OTA A/B, rollback, log ota_event
+│   ├── device_identity.c / .h  UUID + api_key NVS, POST /register
+│   ├── telemetry.c / .h        ring buffer, log NVS, flush task
+│   └── command_poll.c / .h     poll commands, upload_full_log, force_ota
 ├── components/
-│   ├── helix-mp3/               ← sources Helix complètes (RPSL/RCSL)
-│   ├── faad2/                   ← sources fdk-aac complètes (Fraunhofer)
-│   └── speexdsp/                ← sources SpeexDSP complètes (BSD 3-Clause)
-└── telemetry-server/
-    ├── docker-compose.yml       ← stack Portainer : Caddy + Go API + Postgres + Grafana
-    ├── Caddyfile
-    ├── schema.sql
-    ├── .env.example
-    ├── api/
-    │   ├── Dockerfile
-    │   └── main.go              ← API Go complète (~360 lignes)
-    ├── grafana-provisioning/    ← datasource + 3 dashboards
-    └── static/privacy.html
+│   ├── helix-mp3/              sources Helix (RPSL/RCSL)
+│   ├── faad2/                  sources fdk-aac (Fraunhofer)
+│   └── speexdsp/               sources SpeexDSP (BSD 3-Clause)
+├── install/
+│   ├── index.html              page d'installation GitHub Pages (vanilla JS)
+│   ├── manifest.json           ESP Web Tools firmware manifest
+│   └── firmware/               binaires générés par CI (bootloader, partition-table, app)
+├── telemetry-server/
+│   ├── docker-compose.yml
+│   ├── api/main.go
+│   └── grafana-provisioning/
+└── .github/workflows/
+    └── pages.yml               build firmware + deploy GitHub Pages
 ```
+
+### NVS namespace `"carradio"`
+
+| Clé | Type | Description |
+|---|---|---|
+| `device_name` | str | Nom du device (mDNS, SoftAP SSID, BT source) |
+| `playlist_json` | str | Playlist JSON (array, max 5 entrées) |
+| `playlist_idx` | u8 | Index station courante (persisté entre reboots) |
+| `wifi_ssid` | str | SSID du hotspot |
+| `wifi_pass` | str | Mot de passe WiFi |
+| `bt_name` | str | Nom de l'enceinte Bluetooth |
+| `bt_mac` | str | MAC Bluetooth (`AA:BB:CC:DD:EE:FF`) |
+| `phase` | u8 | 0=WiFi, 1=BT, 2=ready |
+| `boot_fail_count` | u8 | Garde boot-loop |
+| `stream_url` | str | Legacy — remplacé par `playlist_json` |

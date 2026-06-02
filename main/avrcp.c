@@ -1,16 +1,3 @@
-/**
- * @file avrcp.c
- * @brief AVRCP TG (Target) implementation.
- *
- * Provides two features:
- *  - Receives PASSTHROUGH play/pause/stop from the car and forwards them
- *    to the supervisor via supervisor_avrcp_command().
- *  - Responds to GetElementAttributes requests with current track metadata
- *    and pushes track-change notifications when metadata updates.
- *
- * Must be initialised BEFORE A2DP (bluetooth_a2dp_start).
- */
-
 #include "avrcp.h"
 #include "supervisor.h"
 #include "telemetry.h"
@@ -211,6 +198,15 @@ esp_err_t avrcp_init(void)
         ESP_LOGE(TAG, "avrc_tg_register_callback failed: %s", esp_err_to_name(err));
         return err;
     }
+
+    /* Declare supported passthrough commands so the car enables next/prev buttons */
+    esp_avrc_psth_bit_mask_t psth = {0};
+    esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_PLAY);
+    esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_PAUSE);
+    esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_STOP);
+    esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_FORWARD);
+    esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &psth, ESP_AVRC_PT_CMD_BACKWARD);
+    esp_avrc_tg_set_psth_cmd_filter(ESP_AVRC_PSTH_FILTER_SUPPORT_CMD, &psth);
 
     ESP_LOGI(TAG, "AVRCP TG initialised");
     return ESP_OK;
