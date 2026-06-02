@@ -41,10 +41,22 @@ esp_err_t storage_set_wifi_ssid(const char *ssid);
 esp_err_t storage_get_wifi_pass(char *buf, size_t len);
 esp_err_t storage_set_wifi_pass(const char *pass);
 
-/* ── Stream URL ──────────────────────────────────────────────────────── */
+/* ── Stream URL (legacy — kept for backward compat) ──────────────────── */
 
 esp_err_t storage_get_stream_url(char *buf, size_t len);
 esp_err_t storage_set_stream_url(const char *url);
+
+/* ── Device name ─────────────────────────────────────────────────────── */
+
+#define STORAGE_DEVICE_NAME_MAX  25   /* max 24 chars + null */
+
+esp_err_t storage_get_device_name(char *buf, size_t len);
+esp_err_t storage_set_device_name(const char *name);
+
+/**
+ * @brief Returns true if both playlist_json and WiFi credentials exist in NVS.
+ */
+bool storage_is_phase_ready(void);
 
 /* ── Bluetooth device ────────────────────────────────────────────────── */
 

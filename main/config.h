@@ -17,6 +17,9 @@
 #define NVS_KEY_BT_NAME             "bt_name"
 #define NVS_KEY_BT_MAC              "bt_mac"
 #define NVS_KEY_BOOT_FAIL_COUNT     "boot_fails"
+#define NVS_KEY_DEVICE_NAME         "device_name"
+#define NVS_KEY_PLAYLIST_JSON       "playlist_json"
+#define NVS_KEY_PLAYLIST_IDX        "playlist_idx"
 
 /* ── WiFi SoftAP ─────────────────────────────────────────────────────── */
 #define CARRADIO_SOFTAP_SSID        "CarRadio-Setup"

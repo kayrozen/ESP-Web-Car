@@ -287,6 +287,41 @@ esp_err_t storage_set_tm_enabled(bool enabled)
     return nvs_commit(s_nvs_handle);
 }
 
+/* ── Device name ─────────────────────────────────────────────────────── */
+
+esp_err_t storage_get_device_name(char *buf, size_t len)
+{
+    if (nvs_open_rw() != ESP_OK) return ESP_FAIL;
+    size_t req = len;
+    return nvs_get_str(s_nvs_handle, NVS_KEY_DEVICE_NAME, buf, &req);
+}
+
+esp_err_t storage_set_device_name(const char *name)
+{
+    esp_err_t err = nvs_open_rw();
+    if (err != ESP_OK) return err;
+    err = nvs_set_str(s_nvs_handle, NVS_KEY_DEVICE_NAME, name);
+    if (err != ESP_OK) return err;
+    return nvs_commit(s_nvs_handle);
+}
+
+bool storage_is_phase_ready(void)
+{
+    if (nvs_open_rw() != ESP_OK) return false;
+
+    /* Check playlist_json exists */
+    size_t plen = 0;
+    esp_err_t err = nvs_get_str(s_nvs_handle, NVS_KEY_PLAYLIST_JSON, NULL, &plen);
+    if (err != ESP_OK || plen == 0) return false;
+
+    /* Check WiFi SSID exists */
+    size_t slen = 0;
+    err = nvs_get_str(s_nvs_handle, NVS_KEY_WIFI_SSID, NULL, &slen);
+    if (err != ESP_OK || slen == 0) return false;
+
+    return true;
+}
+
 /* ── Validation ──────────────────────────────────────────────────────── */
 
 bool storage_validate_ssid(const char *ssid)

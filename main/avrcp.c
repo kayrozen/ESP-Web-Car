@@ -103,8 +103,10 @@ static void avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *par
                     supervisor_avrcp_command(AVRC_CMD_STOP);
                     break;
                 case ESP_AVRC_PT_CMD_FORWARD:
+                    supervisor_avrcp_command(AVRC_CMD_NEXT_STATION);
+                    break;
                 case ESP_AVRC_PT_CMD_BACKWARD:
-                    /* Single station — no-op */
+                    supervisor_avrcp_command(AVRC_CMD_PREV_STATION);
                     break;
                 default:
                     ESP_LOGD(TAG, "PASSTHROUGH key 0x%02x ignored", key);
