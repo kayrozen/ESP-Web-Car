@@ -334,7 +334,7 @@ async function getRBServer() {
     for (const srv of list) {
       const base = 'https://' + srv.name;
       try {
-        const test = await fetch(base + '/json/config', { headers: {'x-app-name': APP_NAME} });
+        const test = await fetch(base + '/json/config');
         if (test.ok) {
           rbServer = base;
           sessionStorage.setItem('rb_server', base);
@@ -510,9 +510,7 @@ function addStation(s) {
 
   // Report click to radio-browser
   if (s.stationuuid && rbServer) {
-    fetch(rbServer + '/json/url/' + s.stationuuid, {
-      headers: { 'x-app-name': APP_NAME }
-    }).catch(() => {});
+    fetch(rbServer + '/json/url/' + s.stationuuid).catch(() => {});
   }
 }
 
@@ -564,9 +562,7 @@ async function doSearch(q) {
       limit: '20',
       hidebroken: 'true',
     });
-    const res = await fetch(server + '/json/stations/search?' + params, {
-      headers: { 'x-app-name': APP_NAME }
-    });
+    const res = await fetch(server + '/json/stations/search?' + params);
     const stations = await res.json();
     renderSearchResults(stations);
   } catch(e) {
@@ -652,9 +648,7 @@ async function showGeoStations(cc) {
       limit: '10',
       hidebroken: 'true',
     });
-    const res = await fetch(server + '/json/stations/search?' + params, {
-      headers: { 'x-app-name': APP_NAME }
-    });
+    const res = await fetch(server + '/json/stations/search?' + params);
     const stations = await res.json();
     if (!stations.length) { showFallbackStations(); return; }
 
