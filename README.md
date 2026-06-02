@@ -14,9 +14,9 @@ Firmware ESP-IDF pour streamer une radio internet sur une enceinte Bluetooth, co
 - [Mise à jour OTA](#mise-à-jour-ota)
 - [Architecture technique](#architecture-technique)
 - [Résilience](#résilience)
+- [Télémétrie](#télémétrie)
 - [Composants audio](#composants-audio)
 - [Structure du projet](#structure-du-projet)
-- [Licences](#licences)
 
 ---
 
@@ -68,6 +68,8 @@ Pour les flashes suivants :
 idf.py -p /dev/ttyUSB0 flash          # flash seul
 idf.py -p /dev/ttyUSB0 monitor        # monitor série seul
 ```
+
+> **Note :** La table de partitions a été mise à jour pour le schéma 8 MB complet (factory + ota_0 + ota_1 + storage + log). Un premier flash complet est nécessaire lors de la migration depuis l'ancienne table.
 
 ---
 
@@ -152,9 +154,11 @@ BT Controller (IDF)             WiFi Stack (IDF)
 BT Host / Bluedroid             Supervisor Task
 A2DP Source Task                HTTP Client Task
                                 Decode + Resample Task
+                                Telemetry Flush Task (prio 2)
+                                Command Poll Task (prio 2)
 ```
 
-Placer les deux stacks radio sur des cœurs opposés est la technique clé qui rend la coexistence stable — c'est ce que fait squeezelite-esp32 et ce qu'Arduino ne peut pas faire.
+Placer les deux stacks radio sur des cœurs opposés est la technique clé qui rend la coexistence stable — c'est ce que fait squeezelite-esp32 et ce qu'Arduino ne peut pas faire. Les tâches télémétrie et command poll tournent à priorité basse (2) et ne perturbent jamais l'audio.
 
 ### Ordre d'initialisation en mode streaming
 
@@ -180,8 +184,100 @@ Le device est conçu pour fonctionner sans surveillance, perdre l'alimentation �
 | Fragmentation heap | Seuil `esp_get_free_heap_size` | Restart contrôlé |
 | OTA cassante | Pas de confirmation 60 s | Rollback automatique bootloader |
 | Deux slots OTA corrompus | Bootloader | Démarrage sur image factory |
+| Serveur télémétrie indisponible | Erreur HTTP flush | Retry au prochain intervalle, audio non affecté |
 
 Le backoff exponentiel suit le même schéma partout : 1 s, 2 s, 4 s … plafonné à 30 s, puis redémarrage propre après 5 minutes d'échec total.
+
+---
+
+## Télémétrie
+
+La télémétrie est **opt-out** et activée par défaut. Elle ne touche jamais au pipeline audio — les tâches flush et command poll sont best-effort, à priorité basse.
+
+### Ce qui est collecté
+
+| Type d'événement | Déclencheur | Identifiants transmis |
+|---|---|---|
+| `boot` | Chaque démarrage | reset_reason, free_heap |
+| `state_transition` | Machine d'état playback | from, to |
+| `bt_event` | Connexion / déconnexion A2DP | MAC hashée (sel par device) |
+| `avrcp_passthrough` | Commande play/pause/stop | code touche |
+| `avrcp_metadata_sent` | Push métadonnées vers la voiture | hash du titre |
+| `icy_title` | Nouveau titre ICY parsé | hash du titre, longueur |
+| `stream_open` | Ouverture flux HTTP | code HTTP, format, metaint |
+| `stream_close` | Fermeture flux | raison, durée |
+| `audio_underrun` | Ring buffer vide | compteur (1 log / 10 underruns) |
+| `ota_event` | Phases OTA | phase (begin/complete/failed) |
+
+Les MACs Bluetooth et les SSIDs WiFi sont hachés avec un sel aléatoire par device avant d'être transmis. Le sel ne quitte jamais le device — les hashes sont irréversibles côté serveur.
+
+### Ce qui n'est jamais collecté
+
+- Mot de passe WiFi
+- Localisation
+- Contenu audio
+- MACs Bluetooth brutes
+- Données personnelles
+
+### Architecture du système de télémétrie
+
+```
+Device (ESP32)                       Serveur (tm.plaquetournante.art)
+──────────────────────────           ──────────────────────────────────
+device_identity.c                    Caddy (TLS auto Let's Encrypt)
+  UUID + api_key en NVS                │
+  argon2id hash côté serveur           ▼
+                                     Go API
+telemetry.c                            POST /api/v1/register
+  ring buffer RAM 64 events            POST /api/v1/sessions
+  log NVS 256 events (partition        POST /api/v1/events  ←── flush 10s
+  "log" 192 KB)                        GET  /api/v1/commands ←─ poll 30s
+  flush toutes les 10s si WiFi         POST /api/v1/uploads
+  SHA-256(sel+raw) pour hashes         │
+                                       ▼
+command_poll.c                       PostgreSQL
+  poll GET /api/v1/commands            events, sessions, devices,
+  upload_full_log → dump JSON          device_commands, full_log_uploads
+  force_ota_check → supervisor         │
+  set_config → NVS                     ▼
+  restart → esp_restart()           Grafana
+                                     Fleet overview
+                                     Session drilldown
+                                     Issue patterns
+```
+
+### Opt-out et suppression des données
+
+Dans le portail Phase 2, décocher **"Aide à l'amélioration de CarRadio"** pour désactiver l'envoi au serveur. Le log local continue de fonctionner.
+
+Pour supprimer toutes les données du serveur : bouton **Supprimer mes données** dans le portail, ou `POST /api/v1/delete`. La suppression est immédiate et cascade sur tous les événements, sessions et fichiers uploadés.
+
+### Déploiement du serveur
+
+Le stack complet est dans `telemetry-server/` — un seul `docker-compose.yml` pour Portainer.
+
+```
+telemetry-server/
+├── docker-compose.yml        Caddy + Go API + Postgres + Grafana
+├── Caddyfile                 TLS auto, basic auth sur /grafana
+├── schema.sql                Appliqué automatiquement au premier démarrage Postgres
+├── .env.example              5 variables à configurer dans Portainer
+├── api/
+│   ├── Dockerfile            Build multi-stage → image FROM scratch (~15 MB)
+│   └── main.go               API complète, ~360 lignes
+├── grafana-provisioning/     Datasource + 3 dashboards provisionnés
+└── static/privacy.html       Page vie privée publique
+```
+
+Variables Portainer à définir (voir `.env.example`) :
+
+| Variable | Génération |
+|---|---|
+| `POSTGRES_PASSWORD` | `openssl rand -base64 32` |
+| `ADMIN_TOKEN` | `openssl rand -hex 32` |
+| `GRAFANA_PASSWORD` | mot de passe libre |
+| `GRAFANA_BASIC_HASH` | `docker run --rm caddy:2-alpine caddy hash-password --plaintext 'pass'` |
+| `API_VERSION` | tag image Docker, `latest` pour toujours tirer le dernier build |
 
 ---
 
@@ -246,38 +342,39 @@ components/speexdsp/
 ```
 esp32-car-radio/
 ├── CMakeLists.txt
-├── partitions.csv               ← table A/B OTA pour flash 8 MB
+├── partitions.csv               ← table 8 MB : factory + A/B OTA + storage + log
 ├── sdkconfig.defaults           ← toute la config sdkconfig prête à l'emploi
 ├── main/
 │   ├── main.c                   ← app_main, boot-fail guard, bouton BOOT, dispatch
-│   ├── config.h                 ← constantes, GPIO, tailles buffers, timeouts
-│   ├── storage.c / .h           ← NVS : lecture/écriture, validation, phase
-│   ├── supervisor.c / .h        ← machine d'état, backoff, surveillance heap, WDT
+│   ├── config.h                 ← constantes, GPIO, tailles buffers, timeouts, clés NVS
+│   ├── storage.c / .h           ← NVS : lecture/écriture, validation, phase, identité
+│   ├── supervisor.c / .h        ← machine d'état, backoff, surveillance heap, WDT, OTA check
 │   ├── wifi.c / .h              ← SoftAP, STA, reconnect, mDNS
 │   ├── portal_phase1.c / .h     ← Phase 1 : SoftAP + DNS hijack + formulaire WiFi/URL
 │   ├── portal_phase2.c / .h     ← Phase 2 : serveur HTTP STA + scan BT + page OTA
-│   ├── bluetooth.c / .h         ← A2DP source, scan GAP, connect par MAC
-│   ├── http_stream.c / .h       ← fetch HTTP, résolution m3u/pls, détection format
+│   ├── bluetooth.c / .h         ← A2DP source, scan GAP, connect par MAC, log bt_event
+│   ├── avrcp.c / .h             ← AVRCP TG, passthrough play/pause/stop, métadonnées
+│   ├── http_stream.c / .h       ← fetch HTTP, résolution m3u/pls, ICY metadata, log stream_*
 │   ├── audio_pipeline.c / .h    ← ring buffers PSRAM, tasks, dispatch, underrun
 │   ├── mp3_decode.c / .h        ← wrapper Helix
 │   ├── aac_decode.c / .h        ← wrapper fdk-aac
 │   ├── resample.c / .h          ← wrapper SpeexDSP
-│   └── ota.c / .h               ← OTA A/B, vérification signature, confirmation rollback
-└── components/
-    ├── helix-mp3/               ← sources Helix complètes (RPSL/RCSL)
-    ├── faad2/                   ← sources fdk-aac complètes (Fraunhofer)
-    └── speexdsp/                ← sources SpeexDSP complètes (BSD 3-Clause)
+│   ├── ota.c / .h               ← OTA A/B, confirmation rollback, log ota_event
+│   ├── device_identity.c / .h   ← UUID + api_key + sel NVS, POST /register
+│   ├── telemetry.c / .h         ← ring buffer, log NVS, flush task, hash_id SHA-256
+│   └── command_poll.c / .h      ← poll commands, upload_full_log, force_ota, set_config
+├── components/
+│   ├── helix-mp3/               ← sources Helix complètes (RPSL/RCSL)
+│   ├── faad2/                   ← sources fdk-aac complètes (Fraunhofer)
+│   └── speexdsp/                ← sources SpeexDSP complètes (BSD 3-Clause)
+└── telemetry-server/
+    ├── docker-compose.yml       ← stack Portainer : Caddy + Go API + Postgres + Grafana
+    ├── Caddyfile
+    ├── schema.sql
+    ├── .env.example
+    ├── api/
+    │   ├── Dockerfile
+    │   └── main.go              ← API Go complète (~360 lignes)
+    ├── grafana-provisioning/    ← datasource + 3 dashboards
+    └── static/privacy.html
 ```
-
----
-
-## Licences
-
-| Composant | Licence | Usage commercial |
-|---|---|---|
-| Helix MP3 | RealNetworks RPSL/RCSL | Vérifier les termes RPSL pour distribution |
-| fdk-aac | Fraunhofer FDK | Libre pour usage non-commercial ; licence commerciale disponible |
-| SpeexDSP | BSD 3-Clause | Libre |
-| ESP-IDF | Apache 2.0 | Libre |
-
-Pour une redistribution commerciale sans contrainte sur le décodeur AAC, contacter Fraunhofer pour une licence commerciale fdk-aac, ou substituer [minimp3](https://github.com/lieff/minimp3) (CC0) pour le MP3.
