@@ -3,6 +3,7 @@ name: Build and Deploy
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -66,3 +67,25 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  release:
+    name: Publish GitHub release
+    needs: build-firmware
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-bins
+          path: firmware/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            firmware/esp_web_car.bin
+            firmware/bootloader.bin
+            firmware/partition-table.bin
+          generate_release_notes: true
