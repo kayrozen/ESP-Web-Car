@@ -15,12 +15,34 @@
 esp_err_t audio_pipeline_start(const char *stream_url);
 
 /**
- * @brief Pause decoding (stops writing to pcm_ringbuf).
+ * @brief Soft-pause: stop writing PCM, keep HTTP stream open.
+ *        A2DP callback outputs silence on underrun (existing behaviour).
+ */
+void audio_pipeline_soft_pause(void);
+
+/**
+ * @brief Hard-pause: stop HTTP stream and stop writing PCM.
+ *        Saves data when paused for longer periods.
+ */
+void audio_pipeline_hard_pause(void);
+
+/**
+ * @brief Legacy pause — equivalent to hard_pause.
  */
 void audio_pipeline_pause(void);
 
 /**
- * @brief Resume decoding after a pause.
+ * @brief Resume from soft-pause (HTTP stream still open).
+ */
+void audio_pipeline_resume_soft(void);
+
+/**
+ * @brief Resume from hard-pause — restarts the HTTP stream.
+ */
+void audio_pipeline_resume_hard(void);
+
+/**
+ * @brief Legacy resume (soft resume; HTTP restart is supervisor's job).
  */
 void audio_pipeline_resume(void);
 

@@ -42,6 +42,8 @@ static volatile bool s_running = false;
 static volatile bool s_paused  = false;
 static TaskHandle_t  s_decode_task = NULL;
 
+static char s_stream_url[256] = {0};
+
 /* ── Decoder state ───────────────────────────────────────────────────── */
 
 static mp3_decoder_handle_t s_mp3_dec = NULL;
@@ -244,6 +246,8 @@ esp_err_t audio_pipeline_start(const char *stream_url)
     s_running = true;
     s_paused  = false;
 
+    strlcpy(s_stream_url, stream_url, sizeof(s_stream_url));
+
     /* Start HTTP stream task */
     esp_err_t err = http_stream_start(stream_url);
     if (err != ESP_OK) {
@@ -277,17 +281,41 @@ esp_err_t audio_pipeline_start(const char *stream_url)
     return ESP_OK;
 }
 
-void audio_pipeline_pause(void)
+void audio_pipeline_soft_pause(void)
+{
+    s_paused = true;
+    /* Keep HTTP stream open — A2DP cb will output silence on underrun */
+}
+
+void audio_pipeline_hard_pause(void)
 {
     s_paused = true;
     http_stream_stop();
 }
 
-void audio_pipeline_resume(void)
+void audio_pipeline_pause(void)
+{
+    audio_pipeline_hard_pause();
+}
+
+void audio_pipeline_resume_soft(void)
 {
     s_paused = false;
-    /* http_stream_start would be needed here with the original URL */
-    ESP_LOGI(TAG, "Pipeline resumed");
+}
+
+void audio_pipeline_resume_hard(void)
+{
+    if (s_stream_url[0] == '\0') {
+        ESP_LOGW(TAG, "No URL cached for hard resume");
+        return;
+    }
+    s_paused = false;
+    http_stream_start(s_stream_url);
+}
+
+void audio_pipeline_resume(void)
+{
+    audio_pipeline_resume_soft();
 }
 
 void audio_pipeline_stop(void)

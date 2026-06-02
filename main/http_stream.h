@@ -39,4 +39,10 @@ audio_format_t http_stream_get_format(void);
  */
 bool http_stream_is_running(void);
 
+/**
+ * @brief Copy the current "now playing" title (artist - title or station name).
+ *        Thread-safe. Returns false if nothing is available yet.
+ */
+bool http_stream_get_now_playing(char *buf, size_t len);
+
 #endif

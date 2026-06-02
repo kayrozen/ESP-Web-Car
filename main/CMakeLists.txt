@@ -6,6 +6,7 @@ idf_component_register(
         "wifi.c"
         "portal_phase1.c"
         "portal_phase2.c"
+        "avrcp.c"
         "bluetooth.c"
         "http_stream.c"
         "audio_pipeline.c"

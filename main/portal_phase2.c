@@ -15,6 +15,8 @@
 #include "storage.h"
 #include "bluetooth.h"
 #include "ota.h"
+#include "supervisor.h"
+#include "http_stream.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -33,6 +35,40 @@ static const char *TAG = "portal2";
 static httpd_handle_t s_server = NULL;
 
 /* ── HTML page ───────────────────────────────────────────────────────── */
+
+/* ── GET /now_playing ────────────────────────────────────────────────── */
+
+static esp_err_t now_playing_handler(httpd_req_t *req)
+{
+    char np[128] = {0};
+    bool ok = http_stream_get_now_playing(np, sizeof(np));
+    char json[160];
+    if (ok)
+        snprintf(json, sizeof(json), "{\"title\":\"%s\"}", np);
+    else
+        strlcpy(json, "{\"title\":\"\"}", sizeof(json));
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, json);
+    return ESP_OK;
+}
+
+/* ── POST /playback ──────────────────────────────────────────────────── */
+
+static esp_err_t playback_handler(httpd_req_t *req)
+{
+    char body[32] = {0};
+    int ret = httpd_req_recv(req, body, sizeof(body) - 1);
+    if (ret > 0) body[ret] = '\0';
+
+    /* body = "action=play" or "action=pause" */
+    if (strstr(body, "play"))
+        supervisor_avrcp_command(AVRC_CMD_PLAY);
+    else if (strstr(body, "pause"))
+        supervisor_avrcp_command(AVRC_CMD_PAUSE);
+
+    httpd_resp_sendstr(req, "OK");
+    return ESP_OK;
+}
 
 static const char *PAGE_HTML =
 "<!DOCTYPE html><html lang='en'><head>"
@@ -61,11 +97,29 @@ static const char *PAGE_HTML =
 "<button onclick='startScan()'>&#128246; Scan for Bluetooth Devices</button>"
 "<div id='status'>Press Scan to discover nearby speakers.</div>"
 "<div id='devices'></div>"
+"<h2>&#127925; Now Playing</h2>"
+"<div id='nowplaying' style='background:#16213e;padding:10px;border-radius:6px;"
+"margin-bottom:8px;color:#4ecca3;min-height:24px'></div>"
+"<div style='display:flex;gap:8px'>"
+"<button onclick='sendPlayback(\"play\")' style='background:#27ae60'>&#9654; Play</button>"
+"<button onclick='sendPlayback(\"pause\")' style='background:#e94560'>&#9646;&#9646; Pause</button>"
+"</div>"
 "<h2>&#128421; OTA Firmware Update</h2>"
 "<input type='url' id='ota-url' placeholder='https://example.com/firmware.bin'>"
 "<button onclick='startOta()'>&#8593; Update Firmware</button>"
 "<div id='ota-status'></div>"
 "<script>"
+"function pollNowPlaying(){"
+"  fetch('/now_playing').then(r=>r.json()).then(d=>{"
+"    document.getElementById('nowplaying').textContent=d.title||'—';"
+"  }).catch(()=>{});"
+"}"
+"setInterval(pollNowPlaying,3000);pollNowPlaying();"
+"function sendPlayback(action){"
+"  fetch('/playback',{method:'POST',"
+"    headers:{'Content-Type':'application/x-www-form-urlencoded'},"
+"    body:'action='+action}).catch(()=>{});"
+"}"
 "function startScan(){"
 "  document.getElementById('status').textContent='Scanning for 8 seconds...';"
 "  document.getElementById('devices').innerHTML='';"
@@ -298,6 +352,20 @@ esp_err_t portal_phase2_start(void)
         .handler = ota_start_handler,
     };
     httpd_register_uri_handler(s_server, &ota);
+
+    httpd_uri_t np = {
+        .uri     = "/now_playing",
+        .method  = HTTP_GET,
+        .handler = now_playing_handler,
+    };
+    httpd_register_uri_handler(s_server, &np);
+
+    httpd_uri_t pb = {
+        .uri     = "/playback",
+        .method  = HTTP_POST,
+        .handler = playback_handler,
+    };
+    httpd_register_uri_handler(s_server, &pb);
 
     ESP_LOGI(TAG, "Phase 2 portal started — http://carradio.local");
     return ESP_OK;

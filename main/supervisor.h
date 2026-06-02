@@ -6,6 +6,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "avrcp.h"
+
+typedef enum {
+    AVRC_CMD_PLAY,
+    AVRC_CMD_PAUSE,
+    AVRC_CMD_STOP,
+} avrc_cmd_t;
 
 /**
  * @brief Start the supervisor task.
@@ -38,5 +45,16 @@ uint32_t supervisor_backoff_reset(void);
  * @brief Request supervisor to trigger a full reboot after saving state.
  */
 void supervisor_request_reboot(void);
+
+/**
+ * @brief Called from AVRCP TG passthrough callback to deliver play/pause/stop.
+ *        Safe to call from the BT stack callback context.
+ */
+void supervisor_avrcp_command(avrc_cmd_t cmd);
+
+/**
+ * @brief Returns the current playback state for AVRCP status reporting.
+ */
+playback_state_t supervisor_get_playback_state(void);
 
 #endif /* SUPERVISOR_H */

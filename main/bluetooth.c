@@ -10,6 +10,7 @@
 #include "bluetooth.h"
 #include "config.h"
 #include "audio_pipeline.h"
+#include "avrcp.h"
 
 #include <string.h>
 #include <stdio.h>
