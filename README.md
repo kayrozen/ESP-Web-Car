@@ -108,117 +108,47 @@ components/helix-mp3/
 
 ---
 
-### 4.2 FAAD2 (AAC-LC / HE-AAC)
+### 4.2 FAAD2 (AAC-LC / HE-AAC) — INTÉGRÉ ✓
 
-**Source upstream** : `components/squeezelite/` dans squeezelite-esp32 (fichier `faad.c` + dossier `libfaad/`).
-
-**Fichiers à copier dans `components/faad2/`** :
+Les sources FAAD2 complètes sont dans `components/faad2/` (téléchargées depuis [knik0/faad2](https://github.com/knik0/faad2), GPL v2) :
 
 ```
-libfaad/
-    neaacdec.h       ← header public
-    decoder.c
-    decoder.h
-    common.c
-    common.h
-    bits.c
-    bits.h
-    syntax.c
-    syntax.h
-    specrec.c
-    tns.c
-    is.c
-    ms.c
-    ic_predict.c
-    ltp_predict.c
-    filtbank.c
-    dct4.c
-    mdct.c
-    output.c
-    sbr_dec.c        ← SBR (optionnel, contrôlé par CONFIG_AAC_DISABLE_SBR)
-    sbr_syntax.c
-    sbr_qmf.c
-    sbr_hfadj.c
-    sbr_hfgen.c
-    sbr_fbt.c
-    sbr_tf_grid.c
-    ps_dec.c
-    ps_syntax.c
-    rvlc.c
-    pulse.c
-    error.c
-    gain_control.c
-    mp4.c
-    hcr.c
-    huffman.c
-    analysis.h
-    cfft.c
+components/faad2/
+├── faad2.c              ← wrapper → API interne du projet
+├── include/
+│   └── neaacdec.h       ← API publique FAAD2
+└── libfaad/
+    ├── decoder.c / bits.c / cfft.c / common.c / syntax.c ...  (38 .c)
+    ├── sbr_dec.c / sbr_qmf.c / sbr_syntax.c ...               (SBR — compilé mais désactivé par défaut)
+    └── structs.h / common.h / ... (48 .h)
 ```
 
-**Mettre à jour `components/faad2/CMakeLists.txt`** :
+**Aucune action requise.** `faad2.c` appelle `NeAACDecOpen` → `NeAACDecInit` → `NeAACDecDecode2`.
 
-```cmake
-file(GLOB FAAD2_SRCS "libfaad/*.c")
+**SBR** : contrôlé par `CONFIG_AAC_DISABLE_SBR` dans `sdkconfig.defaults` (activé = SBR off = ~30% CPU en moins). Pour activer le SBR complet, changer la valeur dans `sdkconfig.defaults` puis rebuildez.
 
-idf_component_register(
-    SRCS
-        "faad2.c"
-        ${FAAD2_SRCS}
-    INCLUDE_DIRS
-        "include"
-        "libfaad"
-)
-
-# Désactiver SBR par défaut pour économiser le CPU (coexistence WiFi+BT)
-if(CONFIG_AAC_DISABLE_SBR)
-    target_compile_definitions(${COMPONENT_LIB} PRIVATE SBR_DEC=0)
-endif()
-```
-
-**Remplacer le stub dans `faad2.c`** — `faad2_init` appelle `NeAACDecOpen` + configure les flags SBR, `faad2_decode_frame` appelle `NeAACDecInit` (premier appel) puis `NeAACDecDecode2`. Voir `components/faad2/include/faad2.h` pour la signature attendue.
-
-**Note SBR** : `CONFIG_AAC_DISABLE_SBR=y` est activé par défaut dans `sdkconfig.defaults`. HE-AAC sera décodé en qualité réduite (bande de base seulement) ce qui libère ~30% de CPU pour la coexistence. À activer uniquement si le budget CPU le permet après mesures.
+> **Licence GPL v2** : FAAD2 est GPL, ce qui impose des obligations de distribution des sources pour tout produit commercial. Alternative libre : [fdk-aac](https://github.com/mstorsjo/fdk-aac) (licence Fraunhofer, plus permissive pour usage non-commercial).
 
 ---
 
-### 4.3 SpeexDSP (resampler)
+### 4.3 SpeexDSP (resampler) — INTÉGRÉ ✓
 
-**Source upstream** : [xiph/speexdsp](https://gitlab.xiph.org/xiph/speexdsp) ou `components/squeezelite/resample.c` dans squeezelite-esp32.
-
-**Fichiers à copier dans `components/speexdsp/`** :
+Le resampler SpeexDSP est dans `components/speexdsp/` (téléchargé depuis [xiph/speexdsp](https://github.com/xiph/speexdsp), BSD 3-Clause) :
 
 ```
-libspeexdsp/
-    resample.c       ← le cœur du resampler
-    resample_neon.h  ← optimisations ARM (optionnel)
-    arch.h
-    fixed_generic.h
-    fixed_arm4.h
-    fixed_arm5e.h
-    vorbis_psy.h     ← si présent
+components/speexdsp/
+├── speexdsp_resampler.c          ← wrapper → API interne du projet
+├── include/
+│   └── speexdsp_resampler.h
+└── libspeexdsp/
+    ├── resample.c                ← cœur du resampler (1242 lignes)
+    ├── speex_resampler.h         ← API publique xiph
+    ├── arch.h / fixed_generic.h / fixed_arm4.h / fixed_arm5e.h
+    ├── resample_neon.h           ← optimisations NEON ARM
+    └── vorbis_psy.h
 ```
 
-**Mettre à jour `components/speexdsp/CMakeLists.txt`** :
-
-```cmake
-idf_component_register(
-    SRCS
-        "speexdsp_resampler.c"
-        "libspeexdsp/resample.c"
-    INCLUDE_DIRS
-        "include"
-        "libspeexdsp"
-)
-
-target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    OUTSIDE_SPEEX=1
-    RANDOM_PREFIX=speex
-    FLOATING_POINT=0       # version entiers (moins de CPU)
-    EXPORT=
-)
-```
-
-**Remplacer le stub dans `speexdsp_resampler.c`** — `speexdsp_resampler_init` appelle `speex_resampler_init(channels, in_rate, out_rate, quality, &err)`, `speexdsp_resampler_process` appelle `speex_resampler_process_interleaved_int`. Qualité recommandée : **4** (équilibre audio/CPU, défaut squeezelite-esp32).
+**Aucune action requise.** `speexdsp_resampler.c` appelle `speex_resampler_init` / `speex_resampler_process_interleaved_int` en mode **fixed-point** (entiers, pas de FPU). Qualité **4** par défaut (équilibre audio/CPU sous coexistence WiFi+BT).
 
 ---
 

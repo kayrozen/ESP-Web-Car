@@ -1,25 +1,22 @@
 /**
  * @file speexdsp_resampler.c
- * @brief SpeexDSP resampler stub.
+ * @brief Wrapper around the real SpeexDSP fixed-point resampler.
  *
- * Replace stub bodies with real speex_resampler_* calls once the
- * SpeexDSP source is available.
+ * Maps the project's speexdsp_resampler_* API onto
+ * speex_resampler_init / speex_resampler_process_interleaved_int /
+ * speex_resampler_destroy from xiph/speexdsp.
+ *
+ * Quality level 4 is used (squeezelite-esp32 default): good audio/CPU
+ * balance under WiFi+BT coexistence load. Increase to 5–6 only if the
+ * CPU budget allows after measuring underrun frequency.
  */
 
 #include "speexdsp_resampler.h"
-#include <stdlib.h>
-#include <string.h>
+#include "speex_resampler.h"   /* xiph SpeexDSP public header */
+#include <inttypes.h>
 #include "esp_log.h"
 
 static const char *TAG = "speexdsp";
-
-typedef struct {
-    int      channels;
-    uint32_t in_rate;
-    uint32_t out_rate;
-    int      quality;
-    /* Real SpeexDSP: SpeexResamplerState *state; */
-} speexdsp_ctx_t;
 
 esp_err_t speexdsp_resampler_init(speexdsp_resampler_handle_t *out_handle,
                                    int channels,
@@ -28,19 +25,24 @@ esp_err_t speexdsp_resampler_init(speexdsp_resampler_handle_t *out_handle,
 {
     if (!out_handle) return ESP_ERR_INVALID_ARG;
 
-    speexdsp_ctx_t *ctx = calloc(1, sizeof(speexdsp_ctx_t));
-    if (!ctx) return ESP_ERR_NO_MEM;
+    int err = RESAMPLER_ERR_SUCCESS;
+    SpeexResamplerState *st = speex_resampler_init(
+        (spx_uint32_t)channels,
+        (spx_uint32_t)in_rate,
+        (spx_uint32_t)out_rate,
+        quality,
+        &err);
 
-    ctx->channels = channels;
-    ctx->in_rate  = in_rate;
-    ctx->out_rate = out_rate;
-    ctx->quality  = quality;
+    if (!st || err != RESAMPLER_ERR_SUCCESS) {
+        ESP_LOGE(TAG, "speex_resampler_init failed: err=%d", err);
+        return ESP_ERR_NO_MEM;
+    }
 
-    ESP_LOGW(TAG, "SpeexDSP stub — passthrough mode (%u→%u Hz, %dch)",
-             in_rate, out_rate, channels);
+    ESP_LOGI(TAG, "resampler ready: %"PRIu32"->%"PRIu32" Hz, %dch, quality=%d",
+             in_rate, out_rate, channels, quality);
 
-    *out_handle = (speexdsp_resampler_handle_t)ctx;
-    return ESP_ERR_NOT_SUPPORTED;  /* signal to caller that this is passthrough */
+    *out_handle = (speexdsp_resampler_handle_t)st;
+    return ESP_OK;
 }
 
 esp_err_t speexdsp_resampler_process(speexdsp_resampler_handle_t handle,
@@ -49,16 +51,22 @@ esp_err_t speexdsp_resampler_process(speexdsp_resampler_handle_t handle,
 {
     if (!handle || !input || !output || !out_frames) return ESP_ERR_INVALID_ARG;
 
-    speexdsp_ctx_t *ctx = (speexdsp_ctx_t *)handle;
+    SpeexResamplerState *st = (SpeexResamplerState *)handle;
+    spx_uint32_t in_len  = (spx_uint32_t)in_frames;
+    spx_uint32_t out_len = (spx_uint32_t)*out_frames;
 
-    /* Passthrough — copy input to output, no rate conversion */
-    int copy = (in_frames < *out_frames) ? in_frames : *out_frames;
-    memcpy(output, input, copy * ctx->channels * sizeof(int16_t));
-    *out_frames = copy;
+    int err = speex_resampler_process_interleaved_int(st, input, &in_len, output, &out_len);
+    if (err != RESAMPLER_ERR_SUCCESS) {
+        ESP_LOGW(TAG, "resample error: %d", err);
+        return ESP_FAIL;
+    }
+
+    *out_frames = (int)out_len;
     return ESP_OK;
 }
 
 void speexdsp_resampler_deinit(speexdsp_resampler_handle_t handle)
 {
-    free(handle);
+    if (handle)
+        speex_resampler_destroy((SpeexResamplerState *)handle);
 }
