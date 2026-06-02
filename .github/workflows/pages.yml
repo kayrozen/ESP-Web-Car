@@ -1,24 +1,65 @@
-name: Deploy Install Page
+name: Build and Deploy
+
 on:
   push:
     branches: [main]
-    paths: [install/**]
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 jobs:
+  build-firmware:
+    name: Build ESP32 firmware
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v4.4.8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py set-target esp32
+          idf.py build
+
+      - name: Collect binaries
+        run: |
+          mkdir -p install/firmware
+          cp build/carradio.bin          install/firmware/carradio.bin
+          cp build/bootloader/bootloader.bin install/firmware/bootloader.bin
+          cp build/partition_table/partition-table.bin install/firmware/partition-table.bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-bins
+          path: install/firmware/
+
   deploy:
+    name: Deploy install page
+    needs: build-firmware
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-bins
+          path: install/firmware/
+
       - uses: actions/configure-pages@v4
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: install/
+
       - id: deployment
         uses: actions/deploy-pages@v4
