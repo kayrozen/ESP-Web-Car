@@ -1,0 +1,19 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "stats_monitor.c"
+        "station_list.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        audio_pipeline
+        audio_sal
+        audio_stream
+        audio_decoder
+        bluetooth_service
+        esp_wifi
+        nvs_flash
+        esp_http_client
+        esp_netif
+        freertos
+        log
+)
