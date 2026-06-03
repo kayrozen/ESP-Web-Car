@@ -19,6 +19,7 @@ idf_component_register(
         "command_poll.c"
         "provisioning_serial.c"
         "playlist.c"
+        "led_status.c"
     INCLUDE_DIRS
         "."
     REQUIRES

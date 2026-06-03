@@ -48,6 +48,12 @@
 #define CARRADIO_RESET_GPIO         0   /* BOOT button */
 #define CARRADIO_RESET_HOLD_MS      3000
 
+/* LED status — override with -DLED_STATUS_GPIO=<pin> in build flags.
+ * Dev board: IO19.  Production boards: IO17. */
+#ifndef LED_STATUS_GPIO
+#define LED_STATUS_GPIO             19
+#endif
+
 /* ── Backoff / timeouts ──────────────────────────────────────────────── */
 #define CARRADIO_BACKOFF_INIT_MS    500
 #define CARRADIO_BACKOFF_MAX_MS     30000

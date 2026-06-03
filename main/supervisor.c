@@ -1,5 +1,6 @@
 #include "supervisor.h"
 #include "config.h"
+#include "led_status.h"
 #include "storage.h"
 #include "wifi.h"
 #include "bluetooth.h"
@@ -68,16 +69,19 @@ static void set_playback_state(playback_state_t new_state)
             } else if (old == PLAYBACK_STATE_HARD_PAUSED) {
                 audio_pipeline_resume_hard();
             }
+            led_status_set(LED_STATE_PLAYING);
             break;
 
         case PLAYBACK_STATE_SOFT_PAUSED:
             audio_pipeline_soft_pause();
             xTimerReset(s_soft_pause_timer, 0);
+            led_status_set(LED_STATE_SOFT_PAUSED);
             break;
 
         case PLAYBACK_STATE_HARD_PAUSED:
             if (s_soft_pause_timer) xTimerStop(s_soft_pause_timer, 0);
             audio_pipeline_hard_pause();
+            led_status_set(LED_STATE_HARD_PAUSED);
             break;
     }
 
@@ -146,6 +150,7 @@ static void check_heap_health(void)
 static void run_phase1(void)
 {
     ESP_LOGI(TAG, "Entering PHASE 1 — WiFi credentials portal (SoftAP)");
+    led_status_set(LED_STATE_WIFI_PORTAL);
     wifi_start_softap();
     portal_phase1_start();
     /* Blocks until the user submits credentials and device reboots */
@@ -161,6 +166,8 @@ static void run_phase2(void)
 
     uint32_t backoff = 0;
     uint32_t total_wait = 0;
+
+    led_status_set(LED_STATE_CONNECTING);
 
     /* Connect to the saved hotspot with backoff */
     while (wifi_connect_sta() != ESP_OK) {
@@ -181,6 +188,7 @@ static void run_phase2(void)
     telemetry_init();
     command_poll_init();
 
+    led_status_set(LED_STATE_BT_PORTAL);
     portal_phase2_start();
 
     while (1) {
@@ -207,6 +215,8 @@ static void run_streaming(void)
 
     uint32_t wifi_backoff = 0, bt_backoff = 0;
     uint32_t wifi_fail_ms = 0, bt_fail_ms = 0;
+
+    led_status_set(LED_STATE_CONNECTING);
 
     /* Connect WiFi with backoff */
     while (wifi_connect_sta() != ESP_OK) {
@@ -264,6 +274,7 @@ static void run_streaming(void)
     char stream_url[STORAGE_URL_MAX] = {0};
     if (cur) strlcpy(stream_url, cur->url, sizeof(stream_url));
     audio_pipeline_start(stream_url);
+    led_status_set(LED_STATE_PLAYING);
 
     TickType_t stream_start = xTaskGetTickCount();
     bool good_boot_signalled = false;
@@ -285,6 +296,7 @@ static void run_streaming(void)
                      "{\"phase\":\"begin\",\"url\":\"%s\"}", ota_url);
             telemetry_log("ota_event", payload);
             ESP_LOGI(TAG, "OTA update from: %s", ota_url);
+            led_status_set(LED_STATE_OTA);
             ota_perform_update(ota_url); /* reboots on success */
             telemetry_log("ota_event", "{\"phase\":\"failed\"}");
         }
@@ -346,6 +358,7 @@ static void run_streaming(void)
         if (!wifi_is_connected()) {
             ESP_LOGW(TAG, "WiFi lost — hard pausing pipeline");
             set_playback_state(PLAYBACK_STATE_HARD_PAUSED);
+            led_status_set(LED_STATE_CONNECTING);
             wifi_backoff = supervisor_backoff_next(wifi_backoff);
             wifi_fail_ms += wifi_backoff;
             if (wifi_fail_ms >= CARRADIO_FAIL_REBOOT_MS) {
@@ -365,6 +378,7 @@ static void run_streaming(void)
         if (!bluetooth_is_connected()) {
             ESP_LOGW(TAG, "BT lost — hard pausing pipeline");
             set_playback_state(PLAYBACK_STATE_HARD_PAUSED);
+            led_status_set(LED_STATE_CONNECTING);
             bt_backoff = supervisor_backoff_next(bt_backoff);
             bt_fail_ms += bt_backoff;
             if (bt_fail_ms >= CARRADIO_FAIL_REBOOT_MS) {

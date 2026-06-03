@@ -13,6 +13,7 @@
 #include "supervisor.h"
 #include "device_identity.h"
 #include "provisioning_serial.h"
+#include "led_status.h"
 
 static const char *TAG = "main";
 
@@ -33,6 +34,8 @@ static void check_reset_button(void)
         vTaskDelay(pdMS_TO_TICKS(CARRADIO_RESET_HOLD_MS));
         if (gpio_get_level(CARRADIO_RESET_GPIO) == 0) {
             ESP_LOGW(TAG, "Factory reset triggered — erasing config");
+            led_status_set(LED_STATE_FACTORY_RESET);
+            vTaskDelay(pdMS_TO_TICKS(1500)); /* let the burst play out */
             storage_erase_all();
             esp_restart();
         }
@@ -48,6 +51,8 @@ static void apply_boot_fail_guard(void)
 
     if (fail_count > CARRADIO_BOOT_FAIL_MAX) {
         ESP_LOGE(TAG, "Too many failed boots — falling back to Phase 1 portal");
+        led_status_set(LED_STATE_ERROR_LOOP);
+        vTaskDelay(pdMS_TO_TICKS(6000)); /* one full SOS cycle visible */
         storage_reset_phase();
         storage_set_boot_fail_count(0);
     }
@@ -69,6 +74,8 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     ESP_ERROR_CHECK(storage_init());
+    led_status_init();
+    led_status_set(LED_STATE_BOOT);
     device_identity_init();   /* load/generate identity; no WiFi needed */
 
     /* Wait for serial provisioning (up to 30s). Must run before WiFi/BT. */
