@@ -129,43 +129,50 @@ static void gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         case ESP_BT_GAP_DISC_RES_EVT: {
             if (!s_scanning || s_scan_count >= CARRADIO_BT_MAX_DEVICES) break;
 
-            bt_device_t *dev = &s_scan_results[s_scan_count];
-            memcpy(dev->mac, param->disc_res.bda, 6);
-            snprintf(dev->mac_str, sizeof(dev->mac_str),
-                     "%02X:%02X:%02X:%02X:%02X:%02X",
-                     dev->mac[0], dev->mac[1], dev->mac[2],
-                     dev->mac[3], dev->mac[4], dev->mac[5]);
-            dev->rssi = 0;
-            strlcpy(dev->name, "Unknown", sizeof(dev->name));
+            /* Deduplicate — inquiry can report the same device multiple times */
+            for (int i = 0; i < s_scan_count; i++) {
+                if (memcmp(s_scan_results[i].mac, param->disc_res.bda, 6) == 0)
+                    goto disc_done;
+            }
 
-            /* Try to find device name in EIR */
-            for (int i = 0; i < param->disc_res.num_prop; i++) {
-                esp_bt_gap_dev_prop_t *p = &param->disc_res.prop[i];
-                if (p->type == ESP_BT_GAP_DEV_PROP_BDNAME && p->len > 0) {
-                    size_t copy_len = (p->len < sizeof(dev->name) - 1)
-                                     ? p->len : sizeof(dev->name) - 1;
-                    memcpy(dev->name, p->val, copy_len);
-                    dev->name[copy_len] = '\0';
-                } else if (p->type == ESP_BT_GAP_DEV_PROP_RSSI && p->len == 1) {
-                    dev->rssi = (int)((int8_t *)p->val)[0];
+            {
+                bt_device_t *dev = &s_scan_results[s_scan_count];
+                memcpy(dev->mac, param->disc_res.bda, 6);
+                snprintf(dev->mac_str, sizeof(dev->mac_str),
+                         "%02X:%02X:%02X:%02X:%02X:%02X",
+                         dev->mac[0], dev->mac[1], dev->mac[2],
+                         dev->mac[3], dev->mac[4], dev->mac[5]);
+                dev->rssi = 0;
+                strlcpy(dev->name, "Unknown", sizeof(dev->name));
+
+                for (int i = 0; i < param->disc_res.num_prop; i++) {
+                    esp_bt_gap_dev_prop_t *p = &param->disc_res.prop[i];
+                    if (p->type == ESP_BT_GAP_DEV_PROP_BDNAME && p->len > 0) {
+                        size_t copy_len = (p->len < sizeof(dev->name) - 1)
+                                         ? p->len : sizeof(dev->name) - 1;
+                        memcpy(dev->name, p->val, copy_len);
+                        dev->name[copy_len] = '\0';
+                    } else if (p->type == ESP_BT_GAP_DEV_PROP_RSSI && p->len == 1) {
+                        dev->rssi = (int)((int8_t *)p->val)[0];
+                    }
                 }
-            }
 
-            if (strcmp(dev->name, "Unknown") == 0) {
-                /* Name not in EIR — request it explicitly */
-                s_pending_names++;
-                esp_bt_gap_read_remote_name(param->disc_res.bda);
+                ESP_LOGI(TAG, "Discovered: %s [%s] rssi=%d",
+                         dev->name, dev->mac_str, dev->rssi);
+                s_scan_count++;
             }
-
-            ESP_LOGI(TAG, "Discovered: %s [%s] rssi=%d",
-                     dev->name, dev->mac_str, dev->rssi);
-            s_scan_count++;
+            disc_done:
             break;
         }
 
         case ESP_BT_GAP_READ_REMOTE_NAME_EVT: {
-            /* Find the device by MAC and update its name */
+            if (!param) break;
             const uint8_t *bda = param->read_rmt_name.bda;
+            if (!bda) {
+                if (s_pending_names > 0 && --s_pending_names == 0)
+                    xSemaphoreGive(s_scan_done_sem);
+                break;
+            }
             if (param->read_rmt_name.stat == ESP_BT_STATUS_SUCCESS) {
                 for (int i = 0; i < s_scan_count; i++) {
                     if (memcmp(s_scan_results[i].mac, bda, 6) == 0) {
@@ -178,15 +185,26 @@ static void gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
                     }
                 }
             }
-            if (s_pending_names > 0) s_pending_names--;
+            if (s_pending_names > 0 && --s_pending_names == 0)
+                xSemaphoreGive(s_scan_done_sem);
             break;
         }
 
         case ESP_BT_GAP_DISC_STATE_CHANGED_EVT:
             if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
-                ESP_LOGI(TAG, "GAP scan complete, found %d devices", s_scan_count);
                 s_scanning = false;
-                if (s_scan_done_sem)
+                ESP_LOGI(TAG, "GAP inquiry done, found %d unique devices", s_scan_count);
+
+                /* Fire RNR requests now that inquiry is complete (HCI buffers free) */
+                s_pending_names = 0;
+                for (int i = 0; i < s_scan_count; i++) {
+                    if (strcmp(s_scan_results[i].name, "Unknown") == 0) {
+                        s_pending_names++;
+                        esp_bt_gap_read_remote_name(s_scan_results[i].mac);
+                    }
+                }
+                /* If no names needed, wake the scan caller immediately */
+                if (s_pending_names == 0)
                     xSemaphoreGive(s_scan_done_sem);
             }
             break;
@@ -318,13 +336,9 @@ esp_err_t bluetooth_gap_scan(bt_device_t *out, int max_count, int *out_count)
         return err;
     }
 
-    /* Wait for scan completion (timeout = scan duration + 2 s) */
+    /* Wait for scan + name resolution (semaphore given after last RNR resolves) */
     xSemaphoreTake(s_scan_done_sem,
-                   pdMS_TO_TICKS((CARRADIO_BT_SCAN_SECS * 1280) + 2000));
-
-    /* Wait up to 3 s for outstanding remote-name requests to resolve */
-    for (int i = 0; i < 30 && s_pending_names > 0; i++)
-        vTaskDelay(pdMS_TO_TICKS(100));
+                   pdMS_TO_TICKS((CARRADIO_BT_SCAN_SECS * 1280) + 5000));
 
     int copy_count = (s_scan_count < max_count) ? s_scan_count : max_count;
     memcpy(out, s_scan_results, copy_count * sizeof(bt_device_t));
