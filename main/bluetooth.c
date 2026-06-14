@@ -154,7 +154,7 @@ static void gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
             if (strcmp(dev->name, "Unknown") == 0) {
                 /* Name not in EIR — request it explicitly */
                 s_pending_names++;
-                esp_bt_gap_get_remote_name(param->disc_res.bda);
+                esp_bt_gap_read_remote_name(param->disc_res.bda);
             }
 
             ESP_LOGI(TAG, "Discovered: %s [%s] rssi=%d",
