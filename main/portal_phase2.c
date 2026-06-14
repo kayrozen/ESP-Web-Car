@@ -173,6 +173,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
 static esp_err_t bt_scan_handler(httpd_req_t *req)
 {
+    ESP_LOGI(TAG, "BT scan requested");
     bt_device_t *devices = calloc(CARRADIO_BT_MAX_DEVICES, sizeof(bt_device_t));
     if (!devices) {
         httpd_resp_send_500(req);

@@ -424,8 +424,8 @@ esp_err_t telemetry_init(void)
     s_ring_mutex = xSemaphoreCreateMutex();
     if (!s_ring_mutex) return ESP_ERR_NO_MEM;
 
-    /* Restore telemetry_enabled from NVS */
-    uint8_t tm_en = 1;
+    /* Restore telemetry_enabled from NVS (defaults OFF until server is configured) */
+    uint8_t tm_en = 0;
     storage_get_tm_enabled(&tm_en);
     s_enabled = (tm_en != 0);
 

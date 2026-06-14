@@ -212,6 +212,12 @@ esp_err_t bluetooth_init(void)
     /* Set discoverability off — we're the source, not the target */
     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
 
+    /* Verbose BT logs for debugging */
+    esp_log_level_set("BT_AV",   ESP_LOG_DEBUG);
+    esp_log_level_set("BT_BTM",  ESP_LOG_DEBUG);
+    esp_log_level_set("BT_HCI",  ESP_LOG_DEBUG);
+    esp_log_level_set("GAP",     ESP_LOG_DEBUG);
+
     s_bt_initialized = true;
     ESP_LOGI(TAG, "Bluetooth initialized");
     return ESP_OK;
@@ -273,6 +279,7 @@ esp_err_t bluetooth_gap_scan(bt_device_t *out, int max_count, int *out_count)
     s_scan_count = 0;
     s_scanning   = true;
 
+    ESP_LOGI(TAG, "Starting GAP inquiry (~10 s)...");
     /* inq_duration unit = 1.28 s; CARRADIO_BT_SCAN_SECS=8 → ~10.24 s */
     esp_err_t err = esp_bt_gap_start_discovery(
         ESP_BT_INQ_MODE_GENERAL_INQUIRY,
