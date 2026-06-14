@@ -210,8 +210,9 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     }
 
     /* Show current playlist if available */
-    char playlist_json[2048] = {0};
-    if (storage_get_playlist_json(playlist_json, sizeof(playlist_json)) == ESP_OK && playlist_json[0]) {
+    char *playlist_json = malloc(2048);
+    if (playlist_json &&
+        storage_get_playlist_json(playlist_json, 2048) == ESP_OK && playlist_json[0]) {
         httpd_resp_sendstr_chunk(req, "<h2>Current Playlist</h2><ul class='playlist-list'>");
         /* Parse and list station names */
         cJSON *arr = cJSON_Parse(playlist_json);
@@ -234,6 +235,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
             "Playlist was set during installation via the install page. "
             "Re-flash to change it.</p>");
     }
+    free(playlist_json);
 
     httpd_resp_sendstr_chunk(req, PAGE_HTML_FORM);
     httpd_resp_sendstr_chunk(req, NULL);  /* end chunked */
