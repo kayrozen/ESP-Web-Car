@@ -198,15 +198,15 @@ static void run_streaming(void)
 {
     ESP_LOGI(TAG, "Entering STREAMING mode");
 
-    /* AVRCP must init before A2DP */
-    avrcp_init();
-
     s_soft_pause_timer = xTimerCreate("soft_pause", pdMS_TO_TICKS(SOFT_PAUSE_ESCALATE_MS),
                                        pdFALSE, NULL, soft_pause_timer_cb);
 
     /* BT before WiFi — see §8 of design doc */
     bluetooth_init();
     bluetooth_a2dp_start();
+
+    /* AVRCP TG must init after A2DP source in IDF v4.4 */
+    avrcp_init();
 
     uint32_t wifi_backoff = 0, bt_backoff = 0;
     uint32_t wifi_fail_ms = 0, bt_fail_ms = 0;

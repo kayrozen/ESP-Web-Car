@@ -69,7 +69,7 @@
 #define CARRADIO_CONFIG_VERSION     2
 
 /* ── Task stack sizes ────────────────────────────────────────────────── */
-#define TASK_STACK_SUPERVISOR       4096
+#define TASK_STACK_SUPERVISOR       8192
 #define TASK_STACK_HTTP_STREAM      8192
 #define TASK_STACK_DECODE           8192
 #define TASK_STACK_PORTAL           6144
