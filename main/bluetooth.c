@@ -257,8 +257,17 @@ esp_err_t bluetooth_gap_scan(bt_device_t *out, int max_count, int *out_count)
         if (err != ESP_OK) return err;
     }
 
+    /* A2DP source must be initialised before GAP inquiry in IDF v4.4 */
+    if (!s_a2dp_started) {
+        esp_err_t err = bluetooth_a2dp_start();
+        if (err != ESP_OK) return err;
+    }
+
     if (!s_scan_done_sem)
         s_scan_done_sem = xSemaphoreCreateBinary();
+
+    /* Drain any stale release from a previous scan */
+    xSemaphoreTake(s_scan_done_sem, 0);
 
     memset(s_scan_results, 0, sizeof(s_scan_results));
     s_scan_count = 0;
