@@ -264,9 +264,10 @@ esp_err_t bluetooth_gap_scan(bt_device_t *out, int max_count, int *out_count)
     s_scan_count = 0;
     s_scanning   = true;
 
+    /* inq_duration unit = 1.28 s; CARRADIO_BT_SCAN_SECS=8 → ~10.24 s */
     esp_err_t err = esp_bt_gap_start_discovery(
         ESP_BT_INQ_MODE_GENERAL_INQUIRY,
-        CARRADIO_BT_SCAN_SECS,  /* duration in 1.28s units — pass seconds directly */
+        CARRADIO_BT_SCAN_SECS,
         0 /* unlimited results */
     );
     if (err != ESP_OK) {
@@ -275,7 +276,7 @@ esp_err_t bluetooth_gap_scan(bt_device_t *out, int max_count, int *out_count)
         return err;
     }
 
-    /* Wait for scan completion (timeout = scan duration + 2s) */
+    /* Wait for scan completion (timeout = scan duration + 2 s) */
     xSemaphoreTake(s_scan_done_sem,
                    pdMS_TO_TICKS((CARRADIO_BT_SCAN_SECS * 1280) + 2000));
 

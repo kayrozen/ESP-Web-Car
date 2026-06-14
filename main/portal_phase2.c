@@ -173,11 +173,16 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
 static esp_err_t bt_scan_handler(httpd_req_t *req)
 {
-    bt_device_t devices[CARRADIO_BT_MAX_DEVICES];
+    bt_device_t *devices = calloc(CARRADIO_BT_MAX_DEVICES, sizeof(bt_device_t));
+    if (!devices) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
     int count = 0;
 
     esp_err_t err = bluetooth_gap_scan(devices, CARRADIO_BT_MAX_DEVICES, &count);
     if (err != ESP_OK) {
+        free(devices);
         httpd_resp_send_500(req);
         return ESP_FAIL;
     }
@@ -203,6 +208,7 @@ static esp_err_t bt_scan_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, json);
     free(json);
+    free(devices);
     return ESP_OK;
 }
 
