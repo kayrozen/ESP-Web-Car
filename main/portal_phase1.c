@@ -155,23 +155,33 @@ static const char *PAGE_HTML_FORM =
 
 static esp_err_t wifi_scan_handler(httpd_req_t *req)
 {
-    /* Start a passive scan */
+    /* Switch to APSTA so the STA radio can scan while the AP stays up */
+    esp_wifi_set_mode(WIFI_MODE_APSTA);
+
     wifi_scan_config_t scan_cfg = {
-        .ssid       = NULL,
-        .bssid      = NULL,
-        .channel    = 0,
+        .ssid        = NULL,
+        .bssid       = NULL,
+        .channel     = 0,
         .show_hidden = true,
-        .scan_type  = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_type   = WIFI_SCAN_TYPE_ACTIVE,
     };
     esp_wifi_scan_start(&scan_cfg, true);  /* blocking */
 
     uint16_t count = 20;
-    wifi_ap_record_t records[20];
-    memset(records, 0, sizeof(records));
+    wifi_ap_record_t *records = calloc(count, sizeof(wifi_ap_record_t));
+    if (!records) {
+        esp_wifi_set_mode(WIFI_MODE_AP);
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
     esp_wifi_scan_get_ap_records(&count, records);
+
+    /* Back to AP-only — STA interface no longer needed */
+    esp_wifi_set_mode(WIFI_MODE_AP);
 
     char *json = malloc(count * 64 + 32);
     if (!json) {
+        free(records);
         httpd_resp_send_500(req);
         return ESP_FAIL;
     }
@@ -189,6 +199,7 @@ static esp_err_t wifi_scan_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, json);
     free(json);
+    free(records);
     return ESP_OK;
 }
 
