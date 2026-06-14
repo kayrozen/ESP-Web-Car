@@ -176,6 +176,9 @@ static void run_phase2(void)
         vTaskDelay(pdMS_TO_TICKS(backoff));
     }
 
+    /* WiFi connected — setup is progressing normally, reset the crash guard */
+    storage_set_boot_fail_count(0);
+
     bluetooth_init();
 
     telemetry_init();
