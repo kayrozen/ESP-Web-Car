@@ -42,6 +42,7 @@ static bt_device_t       s_scan_results[CARRADIO_BT_MAX_DEVICES];
 static int               s_scan_count      = 0;
 static SemaphoreHandle_t s_scan_done_sem   = NULL;
 static bool              s_scanning        = false;
+static volatile int      s_pending_names   = 0;  /* outstanding RNR requests */
 
 /* ── A2DP data callback ──────────────────────────────────────────────── */
 
@@ -150,9 +151,34 @@ static void gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
                 }
             }
 
+            if (strcmp(dev->name, "Unknown") == 0) {
+                /* Name not in EIR — request it explicitly */
+                s_pending_names++;
+                esp_bt_gap_get_remote_name(param->disc_res.bda);
+            }
+
             ESP_LOGI(TAG, "Discovered: %s [%s] rssi=%d",
                      dev->name, dev->mac_str, dev->rssi);
             s_scan_count++;
+            break;
+        }
+
+        case ESP_BT_GAP_READ_REMOTE_NAME_EVT: {
+            /* Find the device by MAC and update its name */
+            const uint8_t *bda = param->read_rmt_name.bda;
+            if (param->read_rmt_name.stat == ESP_BT_STATUS_SUCCESS) {
+                for (int i = 0; i < s_scan_count; i++) {
+                    if (memcmp(s_scan_results[i].mac, bda, 6) == 0) {
+                        strlcpy(s_scan_results[i].name,
+                                (const char *)param->read_rmt_name.rmt_name,
+                                sizeof(s_scan_results[i].name));
+                        ESP_LOGI(TAG, "Remote name resolved: %s [%s]",
+                                 s_scan_results[i].name, s_scan_results[i].mac_str);
+                        break;
+                    }
+                }
+            }
+            if (s_pending_names > 0) s_pending_names--;
             break;
         }
 
@@ -295,6 +321,10 @@ esp_err_t bluetooth_gap_scan(bt_device_t *out, int max_count, int *out_count)
     /* Wait for scan completion (timeout = scan duration + 2 s) */
     xSemaphoreTake(s_scan_done_sem,
                    pdMS_TO_TICKS((CARRADIO_BT_SCAN_SECS * 1280) + 2000));
+
+    /* Wait up to 3 s for outstanding remote-name requests to resolve */
+    for (int i = 0; i < 30 && s_pending_names > 0; i++)
+        vTaskDelay(pdMS_TO_TICKS(100));
 
     int copy_count = (s_scan_count < max_count) ? s_scan_count : max_count;
     memcpy(out, s_scan_results, copy_count * sizeof(bt_device_t));
